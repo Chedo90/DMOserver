@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using dmoserver.character.Enums;
 using dmoserver.character.Network;
 using dmoserver.character.Packets;
+using dmoserver.database;
 
 const int port = 7030;
 const int HandshakeDegree = 32321;
@@ -10,6 +11,8 @@ const int OnConnectEventHandshakeHandler = 65535;
 
 var listener = new TcpListener(IPAddress.Any, port);
 listener.Start();
+
+MongoDbContext db = new();
 
 Console.Title = "DMO Custom Character Server";
 Console.ForegroundColor = ConsoleColor.Magenta;
@@ -20,10 +23,10 @@ Console.ResetColor();
 while (true)
 {
     TcpClient client = await listener.AcceptTcpClientAsync();
-    _ = HandleClientAsync(client);
+    _ = HandleClientAsync(client, db);
 }
 
-static async Task HandleClientAsync(TcpClient client)
+static async Task HandleClientAsync(TcpClient client, MongoDbContext db)
 {
     client.NoDelay = true;
     var endPoint = client.Client.RemoteEndPoint?.ToString();
@@ -45,6 +48,7 @@ static async Task HandleClientAsync(TcpClient client)
     Console.ResetColor();
 
     byte[] lengthBuffer = new byte[2];
+    uint currentAccountId = 0;
 
     try
     {
@@ -96,19 +100,23 @@ static async Task HandleClientAsync(TcpClient client)
                 case CharacterServerPacketEnum.RequestCharacters: // Opcode 1706
                 {
                     packet.Seek(8);
-                    uint accountId = packet.ReadUInt();
+                    currentAccountId = packet.ReadUInt();
 
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"[+] El cliente solicita la lista de personajes para el AccountId: {accountId}");
+                    Console.WriteLine($"[+] El cliente solicita la lista de personajes para el AccountId: {currentAccountId}");
                     Console.ResetColor();
 
-                    // Lista vacía inicial (byte 99) para entrar a creación
-                    byte[] characterListResponse = new CharacterListPacket().Serialize();
+                    // 1. Obtener la cuenta desde MongoDB
+                    var account = await db.GetAccountByIdAsync(currentAccountId);
+
+                    // 2. Serializar personajes reales o lista vacía (byte 99) si es cuenta nueva
+                    byte[] characterListResponse = new CharacterListPacket(account?.Characters).Serialize();
                     await stream.WriteAsync(characterListResponse, 0, characterListResponse.Length);
                     await stream.FlushAsync();
 
+                    int totalChars = account?.Characters?.Count ?? 0;
                     Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("[->] CharacterListPacket (1301) enviado al cliente.");
+                    Console.WriteLine($"[->] CharacterListPacket (1301) enviado con {totalChars} personaje(s) persistido(s).");
                     Console.ResetColor();
                     break;
                 }
@@ -146,15 +154,48 @@ static async Task HandleClientAsync(TcpClient client)
                     string digimonName = packet.ReadZString();
 
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"[+] Tamer creado: '{tamerName}' (Modelo: {tamerModel}) en slot {slotPosition}");
-                    Console.WriteLine($"[+] Digimon inicial: '{digimonName}' (Modelo: {digimonModel})");
+                    Console.WriteLine($"[+] Creando personaje para AccountId {currentAccountId}:");
+                    Console.WriteLine($"    Tamer: '{tamerName}' (Modelo: {tamerModel}) en slot {slotPosition}");
+                    Console.WriteLine($"    Digimon: '{digimonName}' (Modelo: {digimonModel})");
                     Console.ResetColor();
 
-                    // 3. Handshake del paquete 1306
+                    // 3. Persistir en MongoDB
+                    if (currentAccountId > 0)
+                    {
+                        var account = await db.GetOrCreateAccountAsync(currentAccountId);
+                        account.Characters ??= new List<CharacterDocument>();
+
+                        var existingChar = account.Characters.FirstOrDefault(c => c.Slot == slotPosition);
+                        if (existingChar != null)
+                        {
+                            account.Characters.Remove(existingChar);
+                        }
+
+                        account.Characters.Add(new CharacterDocument
+                        {
+                            Slot = slotPosition,
+                            Name = tamerName,
+                            Model = tamerModel,
+                            Partner = new PartnerDigimonDocument
+                            {
+                                Name = digimonName,
+                                Model = digimonModel
+                            }
+                        });
+
+                        account.LastPlayedSlot = slotPosition;
+                        await db.UpdateAccountAsync(account);
+
+                        Console.ForegroundColor = ConsoleColor.Magenta;
+                        Console.WriteLine($"[✓] Personaje '{tamerName}' guardado en MongoDB para la cuenta {currentAccountId}.");
+                        Console.ResetColor();
+                    }
+
+                    // 4. Handshake del paquete 1306
                     var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     var handshake = (short)(handshakeTimestamp & OnConnectEventHandshakeHandler);
 
-                    // 4. Paquete de respuesta 1306
+                    // 5. Paquete de respuesta 1306
                     byte[] createdPacket = new CharacterCreatedPacket(
                         slotPosition,
                         tamerModel,
@@ -173,6 +214,7 @@ static async Task HandleClientAsync(TcpClient client)
                     Console.ResetColor();
                     break;
                 }
+
                 case CharacterServerPacketEnum.GetCharacterPosition: // Opcode 1305
                 {
                     byte position = packet.ReadByte();
@@ -181,18 +223,26 @@ static async Task HandleClientAsync(TcpClient client)
                     Console.WriteLine($"[+] El jugador entra al juego con el personaje del slot: {position}");
                     Console.ResetColor();
 
+                    // Marcamos el slot seleccionado en Mongo
+                    if (currentAccountId > 0)
+                    {
+                        var account = await db.GetOrCreateAccountAsync(currentAccountId);
+                        account.LastPlayedSlot = position;
+                        await db.UpdateAccountAsync(account);
+                    }
+
                     // Enviamos IP, puerto del Game Server (7031) y MapId (105)
                     byte[] infoResponse = new ConnectGameServerInfoPacket("127.0.0.1", "7031", 105).Serialize();
                     await stream.WriteAsync(infoResponse, 0, infoResponse.Length);
                     await stream.FlushAsync();
 
                     Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("[->] ConnectGameServerInfoPacket (1308) enviado con destino a 127.0.0.1:7029 (Mapa 105).");
+                    Console.WriteLine("[->] ConnectGameServerInfoPacket (1308) enviado con destino a 127.0.0.1:7031 (Mapa 105).");
                     Console.ResetColor();
                     break;
                 }
 
-                case CharacterServerPacketEnum.ConnectGameServer:
+                case CharacterServerPacketEnum.ConnectGameServer: // Opcode 1703
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("[+] Cliente solicita autorización para saltar al Game Server.");

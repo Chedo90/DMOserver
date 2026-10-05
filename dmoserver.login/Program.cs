@@ -87,9 +87,8 @@ static async Task HandleClientAsync(TcpClient client, MongoDbContext db)
                         if (currentAccount == null)
                         {
                             Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine($"[-] [Login] Intento fallido para {endPoint}. Manteniendo socket para reintento.");
+                            Console.WriteLine($"[-] [Login] Fallo de credenciales para {endPoint}. Manteniendo socket para reintento.");
                             Console.ResetColor();
-                            // NO cerramos el socket; el paquete de fallo ya fue enviado al cliente
                         }
                         break;
 
@@ -122,7 +121,6 @@ static async Task HandleClientAsync(TcpClient client, MongoDbContext db)
                         Console.WriteLine($"[+] Jugador {currentAccount.Username} seleccionó servidor. Enviando pase al Character Server (Opcode 901)...");
                         Console.ResetColor();
 
-                        // Mandamos al cliente al Character Server (puerto 7030) con su AccountId real de Mongo
                         byte[] characterServerResponse = ConnectCharacterServerPacket.Create((long)currentAccount.AccountId, "127.0.0.1", 7030);
                         await stream.WriteAsync(characterServerResponse);
                         break;
@@ -175,20 +173,24 @@ static async Task<GameAccount?> HandleLoginRequest(byte[] buffer, int offset, in
 
     if (account == null)
     {
-        // 2. Respuesta de LOGIN FALLIDO: Notifica fallo sin romper la conexión TCP
-       var failResponse = new PacketWriter(3301);
-       // Código 101 o 102 dispara el cuadro de diálogo nativo de credenciales incorrectas en el cliente DMO
-        failResponse.WriteInt(102); 
+        // 2. Respuesta de LOGIN FALLIDO nativa (73 = IncorrectPassword)
+        var failResponse = new PacketWriter(3301);
+        failResponse.WriteByte(73); // LoginFailReasonEnum.IncorrectPassword
+        failResponse.WriteByte(39);
         failResponse.WriteByte(0);
-        
+        failResponse.WriteByte(0);
+        failResponse.WriteByte(0);
+
         await stream.WriteAsync(failResponse.Build());
+
+        // No cerramos el socket para evitar el cartel de desconexión
         return null;
     }
 
     // 3. Respuesta de LOGIN EXITOSO
     var successResponse = new PacketWriter(3301);
     successResponse.WriteInt(0);
-    successResponse.WriteByte(1); // 1 = Aceptado
+    successResponse.WriteByte(1);
 
     await stream.WriteAsync(successResponse.Build());
     return account;

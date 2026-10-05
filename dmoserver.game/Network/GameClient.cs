@@ -91,7 +91,7 @@ public sealed class GameClient(TcpClient socket)
         catch (Exception ex)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"[-] Error con {_endPoint}: {ex.Message}");
+            Console.WriteLine($"[-] Error con {_endPoint}: {ex}");
             Console.ResetColor();
         }
         finally
@@ -136,8 +136,19 @@ public sealed class GameClient(TcpClient socket)
 
                 // 1. Obtener o crear cuenta y personaje directamente en MongoDB
                 _account = await Db.GetOrCreateAccountAsync(accountId);
-                _currentCharacter = _account.Characters.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot)
-                                    ?? _account.Characters[0];
+
+                // Búsqueda segura: slot activo o primer personaje existente sin acceso directo por índice [0]
+                _currentCharacter = _account.Characters?.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot)
+                                 ?? _account.Characters?.FirstOrDefault();
+
+                if (_currentCharacter == null)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"[-] [Game] La cuenta {accountId} no tiene personajes registrados en MongoDB. Abortando entrada.");
+                    Console.ResetColor();
+                    Socket.Close();
+                    return;
+                }
 
                 // 2. InitialInfoPacket construido con los datos reales de MongoDB
                 byte[] initialInfo = new InitialInfoPacket(

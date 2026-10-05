@@ -13,3 +13,14 @@ C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver
 C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.genruntimeconfig.cache
 C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\ref\dmoserver.character.dll
 C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.sourcelink.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.csproj.AssemblyReference.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\DnsClient.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\MongoDB.Bson.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\MongoDB.Driver.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\SharpCompress.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\Snappier.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\ZstdSharp.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.database.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserve.81C53987.Up2Date

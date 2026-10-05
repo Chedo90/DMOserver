@@ -74,7 +74,7 @@ public sealed class MongoDbContext
     }
 
     /// <summary>
-    /// Método requerido por GAME SERVER mientras adaptamos el Character Server
+    /// Método requerido por GAME SERVER y CHARACTER SERVER
     /// </summary>
     public async Task<GameAccount> GetOrCreateAccountAsync(uint accountId)
     {
@@ -108,6 +108,15 @@ public sealed class MongoDbContext
         }
 
         return account;
+    }
+
+    /// <summary>
+    /// Actualiza el estado completo de la cuenta (usado al crear personajes o cambiar de slot)
+    /// </summary>
+    public async Task UpdateAccountAsync(GameAccount account)
+    {
+        var filter = Builders<GameAccount>.Filter.Eq(a => a.AccountId, account.AccountId);
+        await _accounts.ReplaceOneAsync(filter, account, new ReplaceOptions { IsUpsert = true });
     }
 
     public async Task UpdatePositionAsync(uint accountId, byte slot, int x, int y, float z)
