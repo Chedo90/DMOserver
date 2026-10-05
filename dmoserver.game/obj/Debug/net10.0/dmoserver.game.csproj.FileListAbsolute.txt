@@ -1,0 +1,15 @@
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.game.exe
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.game.deps.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.game.runtimeconfig.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.game.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.game.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.AssemblyInfoInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.AssemblyInfo.cs
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.csproj.CoreCompileInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\refint\dmoserver.game.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.genruntimeconfig.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\ref\dmoserver.game.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.sourcelink.json

@@ -1,0 +1,15 @@
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.character.exe
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.character.deps.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.character.runtimeconfig.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.character.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\bin\Debug\net10.0\dmoserver.character.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.AssemblyInfoInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.AssemblyInfo.cs
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.csproj.CoreCompileInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\refint\dmoserver.character.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.genruntimeconfig.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\ref\dmoserver.character.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.character\obj\Debug\net10.0\dmoserver.character.sourcelink.json

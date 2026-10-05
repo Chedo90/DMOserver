@@ -1,0 +1,15 @@
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.login.exe
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.login.deps.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.login.runtimeconfig.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.login.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.login.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.AssemblyInfoInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.AssemblyInfo.cs
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.csproj.CoreCompileInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\refint\dmoserver.login.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.genruntimeconfig.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\ref\dmoserver.login.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.sourcelink.json
