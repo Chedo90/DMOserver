@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="dmoserver.character/dmoserver.character.csproj" />
+  <Project Path="dmoserver.database/dmoserver.database.csproj" />
   <Project Path="dmoserver.game/dmoserver.game.csproj" />
   <Project Path="dmoserver.login/dmoserver.login.csproj" />
 </Solution>

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("dmoserver.login")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c3c9d40da089457c147e13cff90112ee582839f2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cbcfac18ec8730d20056d862cad37d485a1ef1c5")]
 [assembly: System.Reflection.AssemblyProductAttribute("dmoserver.login")]
 [assembly: System.Reflection.AssemblyTitleAttribute("dmoserver.login")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

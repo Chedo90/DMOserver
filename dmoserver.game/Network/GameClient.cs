@@ -3,6 +3,7 @@ namespace dmoserver.game.Network;
 using System.Buffers;
 using System.IO;
 using System.Net.Sockets;
+using dmoserver.database;
 using dmoserver.game.Packets;
 
 public sealed class GameClient(TcpClient socket)
@@ -10,11 +11,17 @@ public sealed class GameClient(TcpClient socket)
     private const short HandshakeDegree = 32321;
     private const int OnConnectEventHandshakeHandler = 65535;
 
+    private static readonly MongoDbContext Db = new();
+
     public TcpClient Socket { get; } = socket;
 
     private readonly NetworkStream _stream = socket.GetStream();
     private readonly string _endPoint = socket.Client.RemoteEndPoint?.ToString() ?? "Desconocido";
     private short _clientHandshake;
+
+    // Guardamos la cuenta y personaje activo de la sesión
+    private GameAccount? _account;
+    private CharacterDocument? _currentCharacter;
 
     public async Task StartAsync()
     {
@@ -25,7 +32,7 @@ public sealed class GameClient(TcpClient socket)
 
         try
         {
-            // 1. Handshake inicial OnConnect (Type = 65535 / -1) con Checksum oficial
+            // 1. Handshake inicial OnConnect (Type = 65535 / -1)
             _clientHandshake = (short)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() & OnConnectEventHandshakeHandler);
 
             using (var onConnectWriter = new PacketWriter(65535))
@@ -98,7 +105,7 @@ public sealed class GameClient(TcpClient socket)
     {
         switch (packet.Type)
         {
-            case -1: // Confirmación de Handshake por parte del cliente
+            case -1: // Handshake response
             {
                 var kind = packet.ReadByte();
                 var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -118,39 +125,59 @@ public sealed class GameClient(TcpClient socket)
                 break;
             }
 
-            case 1706: // InitialInformation: El cliente solicita entrar
+            case 1706: // InitialInformation: El cliente solicita entrar al mapa
             {
-                packet.Skip(4); // Saltamos los primeros 4 bytes igual que en InitialInformationPacketProcessor
+                packet.Skip(4);
                 uint accountId = packet.ReadUInt();
 
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"[+] Solicitud de entrada al mapa para AccountId: {accountId}");
                 Console.ResetColor();
 
-                // EN 1706 SOLO SE ENVÍA INITIALINFO (1003)
-                byte[] initialInfo = new InitialInfoPacket("Chedo", "Chedorra", 80001, 31001).Serialize();
+                // 1. Obtener o crear cuenta y personaje directamente en MongoDB
+                _account = await Db.GetOrCreateAccountAsync(accountId);
+                _currentCharacter = _account.Characters.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot)
+                                    ?? _account.Characters[0];
+
+                // 2. InitialInfoPacket construido con los datos reales de MongoDB
+                byte[] initialInfo = new InitialInfoPacket(
+                    _currentCharacter.Name,
+                    _currentCharacter.Partner.Name,
+                    _currentCharacter.Model,
+                    _currentCharacter.Partner.Model
+                ).Serialize();
+
                 await SendAsync(initialInfo);
 
                 Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[✓] InitialInfoPacket (1003) enviado ({initialInfo.Length} bytes).");
+                Console.WriteLine($"[✓] InitialInfoPacket (1003) enviado desde MongoDB ({_currentCharacter.Name} / {_currentCharacter.Partner.Name}).");
                 Console.WriteLine("[*] Esperando respuesta del cliente (Opcode 1001)...");
                 Console.ResetColor();
                 break;
             }
 
-            case 1001: // ComplementarInformation: El cliente cargó el mapa y pide el resto
+            case 1001: // ComplementarInformation: El cliente cargó el mapa
             {
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("[+] Cliente confirmó carga del mapa (Opcode 1001 recibido).");
                 Console.ResetColor();
 
-                // Ahora que el mapa está listo en el cliente, spawneamos al Tamer y al Digimon
-                byte[] loadTamer = new LoadTamerPacket("Chedo", "Chedorra", 80001, 31001).Serialize();
-                await SendAsync(loadTamer);
+                if (_currentCharacter != null)
+                {
+                    // Spawn del Tamer y Partner usando los datos de MongoDB
+                    byte[] loadTamer = new LoadTamerPacket(
+                        _currentCharacter.Name,
+                        _currentCharacter.Partner.Name,
+                        _currentCharacter.Model,
+                        _currentCharacter.Partner.Model
+                    ).Serialize();
 
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine("[->] LoadTamerPacket (1006) enviado.");
-                Console.ResetColor();
+                    await SendAsync(loadTamer);
+
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine("[->] LoadTamerPacket (1006) enviado.");
+                    Console.ResetColor();
+                }
                 break;
             }
 
@@ -159,7 +186,7 @@ public sealed class GameClient(TcpClient socket)
                 if (packet.Type != 0)
                 {
                     Console.ForegroundColor = ConsoleColor.DarkYellow;
-                    Console.WriteLine($"[!] Opcode recibido: {packet.Type} (Tamaño: {packet.Length})");
+                    Console.WriteLine($"[!] Opcode no manejado: {packet.Type} (Tamaño: {packet.Length})");
                     Console.ResetColor();
                 }
                 break;

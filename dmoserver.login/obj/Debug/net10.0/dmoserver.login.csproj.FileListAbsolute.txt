@@ -13,3 +13,14 @@ C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.log
 C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.genruntimeconfig.cache
 C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\ref\dmoserver.login.dll
 C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.sourcelink.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\DnsClient.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\MongoDB.Bson.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\MongoDB.Driver.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\SharpCompress.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\Snappier.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\ZstdSharp.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\bin\Debug\net10.0\dmoserver.database.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserver.login.csproj.AssemblyReference.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.login\obj\Debug\net10.0\dmoserve.ADEE1AC5.Up2Date

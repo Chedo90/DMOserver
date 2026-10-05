@@ -13,3 +13,14 @@ C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game
 C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.genruntimeconfig.cache
 C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\ref\dmoserver.game.dll
 C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.sourcelink.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserver.game.csproj.AssemblyReference.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\DnsClient.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\MongoDB.Bson.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\MongoDB.Driver.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\SharpCompress.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\Snappier.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\ZstdSharp.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\bin\Debug\net10.0\dmoserver.database.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.game\obj\Debug\net10.0\dmoserve.2E4129F9.Up2Date

@@ -1,0 +1,13 @@
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.deps.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.csproj.AssemblyReference.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.AssemblyInfoInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.AssemblyInfo.cs
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.csproj.CoreCompileInputs.cache
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.sourcelink.json
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\refint\dmoserver.database.dll
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\dmoserver.database.pdb
+C:\Users\unive\Desktop\DMOserver\dmoserver.database\obj\Debug\net10.0\ref\dmoserver.database.dll
