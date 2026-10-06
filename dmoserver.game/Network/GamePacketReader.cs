@@ -1,5 +1,6 @@
 namespace dmoserver.game.Network;
 
+using System;
 using System.Buffers.Binary;
 using System.Text;
 
@@ -49,6 +50,32 @@ public sealed class GamePacketReader
     public uint ReadUInt() => BitConverter.ToUInt32(_buffer, (_position += 4) - 4);
     public long ReadLong() => BitConverter.ToInt64(_buffer, (_position += 8) - 8);
 
+    // NUEVO MÉTODO: Lee cadenas con el formato DMO [1 byte Longitud] + [Texto] + [1 byte Nulo]
+    public string ReadString()
+    {
+        if (_position >= _actualLength) return string.Empty;
+
+        // 1. Leer el byte de longitud inicial
+        byte stringLength = _buffer[_position++];
+        
+        if (stringLength == 0 || _position >= _actualLength) 
+        {
+            if (_position < _actualLength && _buffer[_position] == 0) _position++;
+            return string.Empty;
+        }
+
+        // 2. Leer la cadena exacta
+        ReadOnlySpan<byte> span = _buffer.AsSpan(_position, stringLength);
+        string result = Encoding.ASCII.GetString(span);
+        _position += stringLength;
+
+        // 3. Saltar el byte nulo final (0x00)
+        if (_position < _actualLength && _buffer[_position] == 0) _position++;
+
+        return result;
+    }
+
+    // MÉTODO ANTIGUO: Lee hasta encontrar un byte 0x00 (sin byte de longitud)
     public string ReadZString()
     {
         int start = _position;

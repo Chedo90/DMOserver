@@ -2,7 +2,7 @@ namespace dmoserver.game.Packets;
 
 using dmoserver.game.Network;
 
-public sealed class UpdateMovementSpeedPacket(uint tamerHandle = 100000, uint partnerHandle = 100001, short speed = 600)
+public sealed class UpdateMovementSpeedPacket(uint tamerHandle = 100000, uint partnerHandle = 200000, short speed = 600)
 {
     private const int PacketNumber = 9905;
 
@@ -12,11 +12,9 @@ public sealed class UpdateMovementSpeedPacket(uint tamerHandle = 100000, uint pa
         writer.WriteUInt(tamerHandle);
         writer.WriteUInt(partnerHandle);
 
-        // Velocidad de movimiento (Tamer y Partner)
         writer.WriteShort(speed);
         writer.WriteShort(speed);
 
-        // Condición normal (0)
         writer.WriteInt(0);
         writer.WriteInt(0);
 

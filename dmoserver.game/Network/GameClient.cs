@@ -3,7 +3,11 @@ namespace dmoserver.game.Network;
 using System.Buffers;
 using System.IO;
 using System.Net.Sockets;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using dmoserver.database;
+using dmoserver.game.Handlers;
 using dmoserver.game.Packets;
 
 public sealed class GameClient(TcpClient socket)
@@ -19,9 +23,16 @@ public sealed class GameClient(TcpClient socket)
     private readonly string _endPoint = socket.Client.RemoteEndPoint?.ToString() ?? "Desconocido";
     private short _clientHandshake;
 
-    // Guardamos la cuenta y personaje activo de la sesión
     private GameAccount? _account;
     private CharacterDocument? _currentCharacter;
+
+    // Tracking de posición para comandos y handlers
+    private int _currentTamerX;
+    private int _currentTamerY;
+
+    public CharacterDocument? CurrentCharacter => _currentCharacter;
+    public int CurrentTamerX => _currentTamerX;
+    public int CurrentTamerY => _currentTamerY;
 
     public async Task StartAsync()
     {
@@ -75,12 +86,14 @@ public sealed class GameClient(TcpClient socket)
                     }
 
                     var packet = new GamePacketReader(packetData, packetLength);
+                    if (packet.Type != 1004 && packet.Type != -3)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"[<-] Paquete recibido: Opcode {packet.Type} (Tamaño: {packetLength})");
+                        Console.ResetColor();
+                    }
 
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"[<-] Paquete recibido: Opcode {packet.Type} (Tamaño: {packetLength})");
-                    Console.ResetColor();
-
-                    await ProcessPacketAsync(packet, packetData, packetLength);
+                    await ProcessPacketAsync(packet);
                 }
                 finally
                 {
@@ -101,22 +114,18 @@ public sealed class GameClient(TcpClient socket)
         }
     }
 
-    private async Task ProcessPacketAsync(GamePacketReader packet, byte[] rawBuffer, short packetLength)
+    private async Task ProcessPacketAsync(GamePacketReader packet)
     {
         switch (packet.Type)
         {
             case -1: // Handshake response
             {
-                var kind = packet.ReadByte();
+                packet.ReadByte();
                 var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var handshake = (short)(_clientHandshake ^ HandshakeDegree);
 
                 byte[] connResponse = new ConnectionPacket(handshake, handshakeTimestamp).Serialize();
                 await SendAsync(connResponse);
-
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine("[->] ConnectionPacket (-2) enviado confirmando el Handshake.");
-                Console.ResetColor();
                 break;
             }
 
@@ -130,27 +139,19 @@ public sealed class GameClient(TcpClient socket)
                 packet.Skip(4);
                 uint accountId = packet.ReadUInt();
 
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[+] Solicitud de entrada al mapa para AccountId: {accountId}");
-                Console.ResetColor();
-
-                // 1. Obtener o crear cuenta y personaje directamente en MongoDB
                 _account = await Db.GetOrCreateAccountAsync(accountId);
-
-                // Búsqueda segura: slot activo o primer personaje existente
                 _currentCharacter = _account.Characters?.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot)
                                  ?? _account.Characters?.FirstOrDefault();
 
                 if (_currentCharacter == null)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"[-] [Game] La cuenta {accountId} no tiene personajes registrados en MongoDB. Abortando entrada.");
+                    Console.WriteLine($"[-] La cuenta {accountId} no tiene personajes. Abortando.");
                     Console.ResetColor();
                     Socket.Close();
                     return;
                 }
 
-                // 2. InitialInfoPacket construido con los datos reales de MongoDB
                 byte[] initialInfo = new InitialInfoPacket(
                     _currentCharacter.Name,
                     _currentCharacter.Partner.Name,
@@ -159,83 +160,69 @@ public sealed class GameClient(TcpClient socket)
                 ).Serialize();
 
                 await SendAsync(initialInfo);
-
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[✓] InitialInfoPacket (1003) enviado desde MongoDB ({_currentCharacter.Name} / {_currentCharacter.Partner.Name}).");
-                Console.WriteLine("[*] Esperando respuesta del cliente (Opcode 1001)...");
-                Console.ResetColor();
                 break;
             }
 
-            case 1001: // ComplementarInformation: El cliente cargó el mapa
+            case 1001: // ComplementarInformation: Mapa cargado
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("[+] Cliente confirmó carga del mapa (Opcode 1001 recibido).");
-                Console.ResetColor();
-
                 if (_currentCharacter != null)
                 {
                     uint tamerHandle = (uint)(100000 + _currentCharacter.Slot);
                     uint partnerHandle = (uint)(200000 + _currentCharacter.Slot);
 
-                    // 1. Spawn del Tamer y Partner usando los datos de MongoDB
+                    _currentTamerX = _currentCharacter.Location.X;
+                    _currentTamerY = _currentCharacter.Location.Y;
+
+                    // Spawn inicial de entidades
                     byte[] loadTamer = new LoadTamerPacket(
                         _currentCharacter.Name,
                         _currentCharacter.Partner.Name,
                         _currentCharacter.Model,
                         _currentCharacter.Partner.Model
                     ).Serialize();
-
                     await SendAsync(loadTamer);
 
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("[->] LoadTamerPacket (1006) enviado.");
-                    Console.ResetColor();
-
-                    // 2. Establecer la velocidad de movimiento base para desbloquear el desplazamiento
+                    // Velocidad base
                     byte[] speedPacket = new UpdateMovementSpeedPacket(tamerHandle, partnerHandle, 600).Serialize();
                     await SendAsync(speedPacket);
-
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("[->] UpdateMovementSpeedPacket (9905) enviado (Velocidad: 600).");
-                    Console.ResetColor();
                 }
                 break;
             }
 
-          case 1004: // SyncMovement: Movimiento calibrado (26 bytes)
+            case 1004: // SyncMovement: Movimiento sincronizado
             {
-                uint sequence = packet.ReadUInt();
-                short movementFlag = packet.ReadShort();
-                short subType = packet.ReadShort();
-                int coordX = packet.ReadInt();
-                int coordY = packet.ReadInt();
+                packet.ReadUInt();  // sequence
+                packet.ReadShort(); // movementFlag
+                packet.ReadShort(); // subType
+                int destX = packet.ReadInt();
+                int destY = packet.ReadInt();
                 float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
 
                 uint tamerHandle = _currentCharacter != null ? (uint)(100000 + _currentCharacter.Slot) : 100000;
                 uint partnerHandle = _currentCharacter != null ? (uint)(200000 + _currentCharacter.Slot) : 200000;
 
-                // 1. Enviar movimiento del Tamer
-                byte[] tamerWalk = new TamerWalkPacket(coordX, coordY, tamerHandle).Serialize();
-                await SendAsync(tamerWalk);
+                // Destino del Digimon a la espalda del Tamer (140 unidades)
+                const double followOffset = 140.0;
+                int targetDigimonX = destX - (int)(Math.Cos(yaw) * followOffset);
+                int targetDigimonY = destY - (int)(Math.Sin(yaw) * followOffset);
 
-                // 2. Calcular posición de seguimiento del Digimon (~140 unidades detrás según Yaw)
-                const double followDistance = 140.0;
-                int digimonX = coordX - (int)(Math.Cos(yaw) * followDistance);
-                int digimonY = coordY - (int)(Math.Sin(yaw) * followDistance);
+                // Enviar desplazamiento de ambas entidades
+                await SendAsync(new TamerWalkPacket(destX, destY, tamerHandle).Serialize());
+                await SendAsync(new PartnerWalkPacket(targetDigimonX, targetDigimonY, partnerHandle).Serialize());
 
-                // 3. Enviar movimiento del Partner con su propio paquete
-                byte[] partnerWalk = new PartnerWalkPacket(digimonX, digimonY, partnerHandle).Serialize();
-                await SendAsync(partnerWalk);
-
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine($"[->] Movimiento Tamer: ({coordX}, {coordY}) | Digimon: ({digimonX}, {digimonY})");
-                Console.ResetColor();
+                _currentTamerX = destX;
+                _currentTamerY = destY;
 
                 if (_account != null && _currentCharacter != null)
                 {
-                    _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, coordX, coordY, yaw);
+                    _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, destX, destY, yaw);
                 }
+                break;
+            }
+
+            case 1008: // Chat entrante
+            {
+                await ChatHandler.HandleAsync(this, packet);
                 break;
             }
 
@@ -250,6 +237,35 @@ public sealed class GameClient(TcpClient socket)
                 break;
             }
         }
+    }
+
+    public async Task SendChatMessageAsync(string text)
+    {
+        // Notice (9) o Shout (11) usan Nombre (String), no Handle numérico
+        string senderName = "[Servidor]";
+        
+        byte[] msg = new ChatMessagePacket(text, senderName, ChatType.Notice).Serialize();
+        await SendAsync(msg);
+    }
+
+    public async Task TeleportAsync(int x, int y)
+    {
+        uint tamerHandle = _currentCharacter != null ? (uint)(100000 + _currentCharacter.Slot) : 100000;
+        uint partnerHandle = _currentCharacter != null ? (uint)(200000 + _currentCharacter.Slot) : 200000;
+
+        _currentTamerX = x;
+        _currentTamerY = y;
+
+        await SendAsync(new TamerWalkPacket(x, y, tamerHandle).Serialize());
+        await SendAsync(new PartnerWalkPacket(x, y, partnerHandle).Serialize());
+    }
+
+    public async Task SetSpeedAsync(short speed)
+    {
+        uint tamerHandle = _currentCharacter != null ? (uint)(100000 + _currentCharacter.Slot) : 100000;
+        uint partnerHandle = _currentCharacter != null ? (uint)(200000 + _currentCharacter.Slot) : 200000;
+
+        await SendAsync(new UpdateMovementSpeedPacket(tamerHandle, partnerHandle, speed).Serialize());
     }
 
     public async Task SendAsync(byte[] data)

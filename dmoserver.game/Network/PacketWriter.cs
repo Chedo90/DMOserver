@@ -1,6 +1,8 @@
 namespace dmoserver.game.Network;
 
+using System;
 using System.Buffers.Binary;
+using System.IO;
 using System.Text;
 
 public sealed class PacketWriter : IDisposable
@@ -21,6 +23,7 @@ public sealed class PacketWriter : IDisposable
     }
 
     public void WriteByte(byte value) => _writer.Write(value);
+    public void WriteBytes(byte[] buffer) => _writer.Write(buffer);
     public void WriteShort(short value) => _writer.Write(value);
     public void WriteUShort(ushort value) => _writer.Write(value);
     public void WriteInt(int value) => _writer.Write(value);
@@ -30,17 +33,19 @@ public sealed class PacketWriter : IDisposable
 
     public void WriteString(string value)
     {
-        if (string.IsNullOrEmpty(value))
-        {
-            _writer.Write((byte)0);
-            _writer.Write((byte)0);
-            return;
-        }
-
-        byte[] bytes = Encoding.ASCII.GetBytes(value);
-        _writer.Write((byte)bytes.Length); // 1 byte de longitud
-        _writer.Write(bytes);              // Contenido ASCII
-        _writer.Write((byte)0);            // Null terminator
+        value ??= string.Empty;
+        
+        // 1. Convertir a ASCII
+        byte[] buffer = Encoding.ASCII.GetBytes(value);
+        
+        // 2. Escribir la longitud del texto (1 byte)
+        WriteByte((byte)buffer.Length);
+        
+        // 3. Escribir los bytes del texto
+        WriteBytes(buffer); 
+        
+        // 4. Escribir el byte nulo final (0x00)
+        WriteByte(0);
     }
 
     public byte[] Serialize()
