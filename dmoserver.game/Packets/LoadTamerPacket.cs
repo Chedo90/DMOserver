@@ -2,7 +2,7 @@ namespace dmoserver.game.Packets;
 
 using dmoserver.game.Network;
 
-public sealed class LoadTamerPacket(string tamerName, string digimonName, int tamerModel, int digimonModel)
+public sealed class LoadTamerPacket(string tamerName, string digimonName, int tamerModel, int digimonModel, uint tamerHandle, uint partnerHandle, int x, int y)
 {
     public const short OpCode = 1006;
 
@@ -14,12 +14,12 @@ public sealed class LoadTamerPacket(string tamerName, string digimonName, int ta
         writer.WriteShort(2);
 
         // Coordenadas y datos básicos del Tamer
-        writer.WriteInt(30000); // X
-        writer.WriteInt(30000); // Y
-        writer.WriteUInt(1000); // GeneralHandler
+        writer.WriteInt(x); // X
+        writer.WriteInt(y); // Y
+        writer.WriteUInt(tamerHandle); // GeneralHandler dinámico del Tamer
         writer.WriteInt(tamerModel);
-        writer.WriteInt(30000); // X dup
-        writer.WriteInt(30000); // Y dup
+        writer.WriteInt(x); // X dup
+        writer.WriteInt(y); // Y dup
         writer.WriteString(tamerName);
         writer.WriteByte(1);     // Level
         writer.WriteFloat(0.0f); // Z
@@ -45,7 +45,7 @@ public sealed class LoadTamerPacket(string tamerName, string digimonName, int ta
 
         writer.WriteInt(0); // CurrentCondition (0 = normal)
         writer.WriteInt(0); // Sync
-        writer.WriteInt(2000); // Partner GeneralHandler
+        writer.WriteUInt(partnerHandle); // GeneralHandler dinámico del Partner
         writer.WriteShort(10000); // Size (100.00%)
 
         // Guild (null -> byte 0)
@@ -59,19 +59,19 @@ public sealed class LoadTamerPacket(string tamerName, string digimonName, int ta
         writer.WriteInt(0);   // Costume
 
         // Datos del Partner Digimon
-        writer.WriteInt(30050); // Partner X
-        writer.WriteInt(30050); // Partner Y
-        writer.WriteInt(2000);  // Partner GeneralHandler
+        writer.WriteInt(x + 50); // Partner X
+        writer.WriteInt(y + 50); // Partner Y
+        writer.WriteUInt(partnerHandle);  // GeneralHandler dinámico del Partner
         writer.WriteInt(digimonModel); // CurrentType
-        writer.WriteInt(30050); // Partner X dup
-        writer.WriteInt(30050); // Partner Y dup
+        writer.WriteInt(x + 50); // Partner X dup
+        writer.WriteInt(y + 50); // Partner Y dup
         writer.WriteString(digimonName);
         writer.WriteShort(10000); // Size
         writer.WriteByte(1);      // Level
         writer.WriteFloat(0.0f);  // Z
         writer.WriteShort(600);   // MS
         writer.WriteShort(2000);  // AS
-        writer.WriteUInt(1000);   // Tamer GeneralHandler
+        writer.WriteUInt(tamerHandle);  // Tamer GeneralHandler dinámico (enlaza con su dueño)
         writer.WriteByte(100);    // HpRate
         writer.WriteInt(0);       // Partner Condition
 

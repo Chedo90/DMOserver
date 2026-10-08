@@ -2,7 +2,7 @@ namespace dmoserver.game.Packets;
 
 using dmoserver.game.Network;
 
-public sealed class UpdateMovementSpeedPacket(uint tamerHandle = 100000, uint partnerHandle = 200000, short speed = 600)
+public sealed class UpdateMovementSpeedPacket(uint tamerHandle, uint partnerHandle, short speed = 600)
 {
     private const int PacketNumber = 9905;
 
