@@ -2,7 +2,7 @@ namespace dmoserver.game.Packets;
 
 using dmoserver.game.Network;
 
-public sealed class InitialInfoPacket(string tamerName, string digimonName, int tamerModel, int digimonModel)
+public sealed class InitialInfoPacket(string tamerName, string digimonName, int tamerModel, int digimonModel, uint tamerHandle, uint partnerHandle, int x, int y)
 {
     public const short OpCode = 1003;
 
@@ -12,9 +12,9 @@ public sealed class InitialInfoPacket(string tamerName, string digimonName, int 
 
         // 1. Tipo y Coordenadas iniciales
         writer.WriteInt(1);
-        writer.WriteInt(30000); // Location X
-        writer.WriteInt(30000); // Location Y
-        writer.WriteInt(1000);  // GeneralHandler
+        writer.WriteInt(x); // Location X
+        writer.WriteInt(y); // Location Y
+        writer.WriteUInt(tamerHandle); // <--- Handle dinámico
         writer.WriteInt(tamerModel);
         writer.WriteString(tamerName);
 
@@ -30,7 +30,7 @@ public sealed class InitialInfoPacket(string tamerName, string digimonName, int 
         writer.WriteInt(50);    // DE
         writer.WriteInt(600);   // MS
 
-        // Helper local para escribir slots de 68 bytes vacíos (ItemId = 0, Amount = 0, 60 bytes padding)
+        // Helper local para escribir slots de 68 bytes vacíos
         static void WriteEmptyItemSlots(PacketWriter w, int count)
         {
             byte[] emptySlot = new byte[68];
@@ -73,7 +73,7 @@ public sealed class InitialInfoPacket(string tamerName, string digimonName, int 
 
         // 10. Partner Digimon Base
         writer.WriteByte(1);     // DigimonSlots
-        writer.WriteInt(2000);   // Partner GeneralHandler
+        writer.WriteUInt(partnerHandle); // <--- Handle dinámico
         writer.WriteInt(digimonModel); // CurrentType
         writer.WriteString(digimonName);
         writer.WriteByte(3);     // HatchGrade (3/5)
@@ -136,7 +136,7 @@ public sealed class InitialInfoPacket(string tamerName, string digimonName, int 
         // 17. Digimon Archive Slots
         writer.WriteInt(1);
 
-        // 18. Party Info (Sin party = Id: 0, LootType: 0, Filters: 0, LeaderSlot: 0, End: 99)
+        // 18. Party Info
         writer.WriteInt(0);
         writer.WriteInt(0);
         writer.WriteByte(0);

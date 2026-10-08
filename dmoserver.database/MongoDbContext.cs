@@ -1,6 +1,8 @@
 namespace dmoserver.database;
 
 using MongoDB.Driver;
+using System;
+using System.Threading.Tasks;
 
 public sealed class MongoDbContext
 {
@@ -42,7 +44,7 @@ public sealed class MongoDbContext
                 AccountId = nextAccountId,
                 Username = username,
                 PasswordHash = password,
-                Characters = [],
+                Characters = [], // En el registro inicial real la lista de personajes está vacía
                 LastPlayedSlot = 0
             };
 
@@ -93,12 +95,16 @@ public sealed class MongoDbContext
                     new CharacterDocument
                     {
                         Slot = 0,
-                        Name = "Marcus",
-                        Model = 80001,
+                        Name = "Adrián",
+                        Model = 80002, // Thomas
+                        
+                        // Inicializamos la ubicación para que MongoDB la pueda actualizar luego
+                        Location = new() { X = 30000, Y = 30000, Z = 0 }, 
+                        
                         Partner = new PartnerDigimonDocument
                         {
-                            Name = "Agumon",
-                            Model = 31001
+                            Name = "MiGaomon",
+                            Model = 31002 // Gaomon
                         }
                     }
                 ]
@@ -110,9 +116,6 @@ public sealed class MongoDbContext
         return account;
     }
 
-    /// <summary>
-    /// Actualiza el estado completo de la cuenta (usado al crear personajes o cambiar de slot)
-    /// </summary>
     public async Task UpdateAccountAsync(GameAccount account)
     {
         var filter = Builders<GameAccount>.Filter.Eq(a => a.AccountId, account.AccountId);

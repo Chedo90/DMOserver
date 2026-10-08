@@ -9,22 +9,27 @@ public static class ChatHandler
 {
     public static async Task HandleAsync(GameClient client, GamePacketReader packet)
     {
-        string message = packet.ReadZString();
+        string message = packet.ReadString();
         string senderName = client.CurrentCharacter?.Name ?? "Tamer";
+        
+        // ¡Usamos el Handle dinámico del personaje conectado!
+        uint tamerHandle = client.TamerHandle; 
 
         Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine($"[Chat] {senderName}: {message}");
+        Console.WriteLine($"[Chat recibido] {senderName}: {message}");
         Console.ResetColor();
 
-        // 1. Procesador de comandos GM
         bool isCommand = await CommandProcessor.ExecuteAsync(client, message);
-        if (isCommand)
-            return;
+        if (isCommand) return;
 
-        // 2. Chat normal: Usamos el Handle para que salga el bocadillo
-        uint tamerHandle = client.CurrentCharacter != null ? (uint)(100000 + client.CurrentCharacter.Slot) : 100000;
+        // Estructura exacta calcada del hex dump (Idéntica a nuestra "Prueba B")
+        using var w = new PacketWriter(1006);
+        w.WriteByte(7);              // ChatType Normal
+        w.WriteByte(1);              // Flag
+        w.WriteUInt(tamerHandle);    // Handle dinámico del Tamer
+        w.WriteString(message);      // Texto
+        w.WriteByte(0);              // Byte nulo final exigido por el cliente
         
-        byte[] chatResponse = new ChatMessagePacket(message, tamerHandle, ChatType.Normal).Serialize();
-        await client.SendAsync(chatResponse);
+        await client.SendAsync(w.Serialize());
     }
 }
