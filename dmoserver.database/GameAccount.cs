@@ -2,6 +2,7 @@ namespace dmoserver.database;
 
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using System.Collections.Generic;
 
 public sealed class GameAccount
 {
@@ -16,6 +17,10 @@ public sealed class GameAccount
 
     [BsonElement("passwordHash")]
     public string PasswordHash { get; set; } = string.Empty;
+
+    [BsonElement("sessionToken")]
+    [BsonIgnoreIfNull]
+    public string? SessionToken { get; set; }
 
     [BsonElement("characters")]
     public List<CharacterDocument> Characters { get; set; } = [];

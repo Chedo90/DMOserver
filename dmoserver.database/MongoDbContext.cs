@@ -37,14 +37,20 @@ public sealed class MongoDbContext
 
         if (account == null)
         {
-            var nextAccountId = (uint)(await _accounts.CountDocumentsAsync(FilterDefinition<GameAccount>.Empty) + 1);
+            // Obtener el AccountId más alto para evitar colisiones de IDs únicos
+            var highestAccount = await _accounts
+                .Find(FilterDefinition<GameAccount>.Empty)
+                .SortByDescending(a => a.AccountId)
+                .FirstOrDefaultAsync();
+
+            uint nextAccountId = (highestAccount?.AccountId ?? 0) + 1;
 
             account = new GameAccount
             {
                 AccountId = nextAccountId,
                 Username = username,
                 PasswordHash = password,
-                Characters = [], // En el registro inicial real la lista de personajes está vacía
+                Characters = [],
                 LastPlayedSlot = 0
             };
 
@@ -70,48 +76,75 @@ public sealed class MongoDbContext
         return null;
     }
 
+    /// <summary>
+    /// Busca la cuenta mediante el token de sesión extraído del paquete DMIPASS
+    /// </summary>
+    public async Task<GameAccount?> GetAccountBySessionTokenAsync(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        var filter = Builders<GameAccount>.Filter.Eq(a => a.SessionToken, token);
+        return await _accounts.Find(filter).FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Asigna o actualiza el token de sesión generado tras pasar el login
+    /// </summary>
+    public async Task SetSessionTokenAsync(uint accountId, string token)
+    {
+        var filter = Builders<GameAccount>.Filter.Eq(a => a.AccountId, accountId);
+        var update = Builders<GameAccount>.Update.Set(a => a.SessionToken, token);
+        await _accounts.UpdateOneAsync(filter, update);
+    }
+
     public async Task<GameAccount?> GetAccountByIdAsync(uint accountId)
     {
         return await _accounts.Find(a => a.AccountId == accountId).FirstOrDefaultAsync();
     }
 
     /// <summary>
-    /// Método requerido por GAME SERVER y CHARACTER SERVER
+    /// Método requerido por GAME SERVER para obtener la cuenta o crearla si la BD está vacía
     /// </summary>
     public async Task<GameAccount> GetOrCreateAccountAsync(uint accountId)
     {
         var filter = Builders<GameAccount>.Filter.Eq(a => a.AccountId, accountId);
         var account = await _accounts.Find(filter).FirstOrDefaultAsync();
 
-        if (account == null)
-        {
-            account = new GameAccount
-            {
-                AccountId = accountId,
-                Username = $"Player_{accountId}",
-                PasswordHash = "demo",
-                Characters =
-                [
-                    new CharacterDocument
-                    {
-                        Slot = 0,
-                        Name = "Adrián",
-                        Model = 80002, // Thomas
-                        
-                        // Inicializamos la ubicación para que MongoDB la pueda actualizar luego
-                        Location = new() { X = 30000, Y = 30000, Z = 0 }, 
-                        
-                        Partner = new PartnerDigimonDocument
-                        {
-                            Name = "MiGaomon",
-                            Model = 31002 // Gaomon
-                        }
-                    }
-                ]
-            };
+        if (account != null) return account;
 
-            await _accounts.InsertOneAsync(account);
-        }
+        // Si la base de datos se borró o la cuenta no existe, la inicializamos con datos por defecto
+        account = new GameAccount
+        {
+            AccountId = accountId,
+            Username = $"User_{accountId}",
+            PasswordHash = "admin",
+            LastPlayedSlot = 0,
+            Characters =
+            [
+                new CharacterDocument
+                {
+                    Slot = 0,
+                    Name = "takatt",
+                    Model = 80001,
+                    Level = 1,
+                    Location = new CharacterLocation { MapId = 1, X = 30000, Y = 30000, Z = 0f },
+                    Partner = new PartnerDigimonDocument
+                    {
+                        Name = "Agumon",
+                        Model = 31001,
+                        Level = 1,
+                        Size = 10000,
+                        HatchGrade = 3
+                    }
+                }
+            ]
+        };
+
+        await _accounts.InsertOneAsync(account);
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"[MongoDB] Cuenta autogenerada: ID {accountId} con Tamer 'takatt' y Partner 'Agumon'");
+        Console.ResetColor();
 
         return account;
     }

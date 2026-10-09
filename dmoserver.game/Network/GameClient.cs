@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.Sockets;
 using System;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using dmoserver.database;
 using dmoserver.game.Handlers;
@@ -25,6 +26,7 @@ public sealed class GameClient(TcpClient socket)
 
     private GameAccount? _account;
     private CharacterDocument? _currentCharacter;
+    private string? _selectedCharacterName; // Rastrea el nombre del Tamer elegido
 
     // Tracking de posición para comandos y handlers
     private int _currentTamerX;
@@ -33,12 +35,9 @@ public sealed class GameClient(TcpClient socket)
     public CharacterDocument? CurrentCharacter => _currentCharacter;
     public int CurrentTamerX => _currentTamerX;
     public int CurrentTamerY => _currentTamerY;
+    private uint _accountId;
+    private string? _sessionToken;
 
-    // -----------------------------------------------------------------------
-    // HANDLES DINÁMICOS: Centralizamos el DNI del personaje y del Digimon.
-    // 32768 (0x8000) es la base obligatoria para que el cliente reconozca Tamers.
-    // Sumamos el Slot para que cada personaje de la cuenta tenga un ID único.
-    // -----------------------------------------------------------------------
     public uint TamerHandle => _currentCharacter != null ? (uint)(32768 + _currentCharacter.Slot) : 32768;
     public uint PartnerHandle => _currentCharacter != null ? (uint)(2000 + _currentCharacter.Slot) : 2000;
 
@@ -93,6 +92,46 @@ public sealed class GameClient(TcpClient socket)
                         await _stream.ReadExactlyAsync(packetData.AsMemory(2, payloadLength));
                     }
 
+                    // --- INTERCEPCIÓN LIMPIA DE DMIPASS ---
+                    if (payloadLength >= 7)
+                    {
+                        string headerText = Encoding.ASCII.GetString(packetData, 2, Math.Min(7, payloadLength));
+                        if (headerText.Equals("DMIPASS", StringComparison.Ordinal))
+                        {
+                            string fullPayload = Encoding.ASCII.GetString(packetData, 2, payloadLength);
+                            
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                            Console.WriteLine($"[GameServer] Paquete DMIPASS recibido e interceptado correctamente.");
+                            Console.ResetColor();
+
+                            string[] parts = fullPayload.Split(' ');
+                            if (parts.Length > 1)
+                            {
+                                _sessionToken = parts[1];
+
+                                // Carga dinámica de la cuenta usando el token de sesión
+                                _account = await Db.GetAccountBySessionTokenAsync(_sessionToken);
+
+                                if (_account != null)
+                                {
+                                    _accountId = _account.AccountId;
+                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine($"[Auth] Sesión validada para la cuenta ID {_accountId}");
+                                    Console.ResetColor();
+                                }
+                                else
+                                {
+                                    Console.ForegroundColor = ConsoleColor.Red;
+                                    Console.WriteLine($"[Auth] No se encontró cuenta para el token de sesión: {_sessionToken}");
+                                    Console.ResetColor();
+                                }
+                            }
+
+                            continue;
+                        }
+                    }
+                    // ----------------------------------------
+
                     var packet = new GamePacketReader(packetData, packetLength);
                     if (packet.Type != 1004 && packet.Type != -3)
                     {
@@ -131,14 +170,14 @@ public sealed class GameClient(TcpClient socket)
         }
     } // Fin de StartAsync()
 
-
     private async Task ProcessPacketAsync(GamePacketReader packet)
     {
         switch (packet.Type)
         {
-            case -1: // Handshake response
+            case -1: // Handshake / KeepAlive inicial
             {
                 packet.ReadByte();
+
                 var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var handshake = (short)(_clientHandshake ^ HandshakeDegree);
 
@@ -152,60 +191,115 @@ public sealed class GameClient(TcpClient socket)
                 break;
             }
 
-            case 1706: // InitialInformation: El cliente solicita entrar al mapa
+            case 1302: // Opcode 16 05 (0x0516) - Selección de personaje
             {
-                // 1. Cargar cuenta desde la BD si aún no se ha hecho
-                if (_account == null)
-                {
-                    // Usamos ID=1 para las pruebas por ahora
-                    _account = await Db.GetOrCreateAccountAsync(1);
-                    _currentCharacter = _account.Characters[0];
-                }
-
-                // 2. Comprobaciones de seguridad (Evitan que el servidor crashee)
-                if (_currentCharacter == null)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("[-] Error crítico: _currentCharacter es null al intentar entrar al mapa.");
-                    Console.ResetColor();
-                    break;
-                }
-
-                if (_currentCharacter.Location == null)
-                {
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("[!] Location era null en Mongo. Asignando coordenadas por defecto.");
-                    Console.ResetColor();
-                    _currentCharacter.Location = new CharacterLocation { X = 30000, Y = 30000, Z = 0 };
-                }
-
-                if (_currentCharacter.Partner == null)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("[-] Error crítico: Partner es null en la base de datos.");
-                    Console.ResetColor();
-                    break;
-                }
-
-                // 3. Continuamos con el flujo normal
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[Login] Coordenadas leídas de Mongo -> X: {_currentCharacter.Location.X}, Y: {_currentCharacter.Location.Y}");
+                _selectedCharacterName = packet.ReadString();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"[Selección] El cliente eligió al Tamer: {_selectedCharacterName}");
                 Console.ResetColor();
-
-                byte[] initialInfo = new InitialInfoPacket(
-                    _currentCharacter.Name,
-                    _currentCharacter.Partner.Name,
-                    _currentCharacter.Model,
-                    _currentCharacter.Partner.Model,
-                    TamerHandle,
-                    PartnerHandle,
-                    _currentCharacter.Location.X,
-                    _currentCharacter.Location.Y
-                ).Serialize();
-
-                await SendAsync(initialInfo);
                 break;
             }
+
+           case 1706: // InitialInformation: El cliente solicita entrar al mapa
+{
+    if (_account == null)
+    {
+        uint accountIdToSearch = _accountId > 0 ? _accountId : 1;
+        _account = await Db.GetAccountByIdAsync(accountIdToSearch) 
+                   ?? await Db.GetOrCreateAccountAsync(accountIdToSearch);
+
+        if (_account != null)
+        {
+            _accountId = _account.AccountId;
+        }
+    }
+
+    if (_account == null)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("[-] Error crítico: No se encontró la cuenta en MongoDB.");
+        Console.ResetColor();
+        break;
+    }
+
+    // Recargar los datos frescos de la cuenta por si se acaba de crear un personaje
+    var freshAccount = await Db.GetAccountByIdAsync(_account.AccountId);
+    if (freshAccount != null)
+    {
+        _account = freshAccount;
+    }
+
+    _account.Characters ??= [];
+
+    if (_account.Characters.Count == 0)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"[-] Error: La cuenta {_account.AccountId} no tiene personajes.");
+        Console.ResetColor();
+        break;
+    }
+
+    // 1. Buscar por nombre si vino en el paquete 1302
+    if (!string.IsNullOrEmpty(_selectedCharacterName))
+    {
+        _currentCharacter = _account.Characters.FirstOrDefault(c => 
+            c.Name.Equals(_selectedCharacterName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // 2. Si no se encontró por nombre, buscar por LastPlayedSlot
+    if (_currentCharacter == null)
+    {
+        _currentCharacter = _account.Characters.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot);
+    }
+
+    // 3. Si aún es null, tomar el de mayor slot (el recién creado suele ser el último)
+    if (_currentCharacter == null)
+    {
+        _currentCharacter = _account.Characters.OrderByDescending(c => c.Slot).FirstOrDefault();
+    }
+
+    // Fallback final
+    _currentCharacter ??= _account.Characters[0];
+
+    // Asegurar coordenadas de spawn válidas (evitar 30000, 30000 si está bugeado)
+    if (_currentCharacter.Location == null || (_currentCharacter.Location.X == 0 && _currentCharacter.Location.Y == 0))
+    {
+        // Coordenadas típicas de inicio seguro (ajusta según el mapa de inicio de tu servidor):
+        _currentCharacter.Location = new CharacterLocation 
+        { 
+            MapId = _currentCharacter.Location?.MapId ?? 1, 
+            X = 15000, 
+            Y = 15000, 
+            Z = 0f 
+        };
+    }
+
+    if (_currentCharacter.Partner == null)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("[-] Error crítico: Partner es null.");
+        Console.ResetColor();
+        break;
+    }
+
+    Console.ForegroundColor = ConsoleColor.Magenta;
+    Console.WriteLine($"[Login] Cargando Tamer con éxito: {_currentCharacter.Name} (Slot: {_currentCharacter.Slot}, Pos: {_currentCharacter.Location.X}, {_currentCharacter.Location.Y})");
+    Console.ResetColor();
+
+    byte[] initialInfo = new InitialInfoPacket(
+        _currentCharacter.Name,
+        _currentCharacter.Partner.Name,
+        _currentCharacter.Model,
+        _currentCharacter.Partner.Model,
+        TamerHandle,
+        PartnerHandle,
+        _currentCharacter.Location.X,
+        _currentCharacter.Location.Y
+    ).Serialize();
+
+    await SendAsync(initialInfo);
+    break;
+}
 
             case 1004: // SyncMovement: Movimiento sincronizado
             {
@@ -216,35 +310,15 @@ public sealed class GameClient(TcpClient socket)
                 int destY = packet.ReadInt();
                 float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
 
-                // Calculamos el destino del Digimon a la espalda del Tamer (140 unidades)
-                // (Es útil dejar este cálculo hecho aquí para cuando hagamos el broadcast a otros jugadores)
                 const double followOffset = 140.0;
                 int targetDigimonX = destX - (int)(Math.Cos(yaw) * followOffset);
                 int targetDigimonY = destY - (int)(Math.Sin(yaw) * followOffset);
 
-                // Actualizamos la memoria del servidor con tu nueva posición
                 _currentTamerX = destX;
                 _currentTamerY = destY;
 
-                // --- CHIVATO 1: Ver si el juego nos manda movimiento en tiempo real ---
-                Console.ForegroundColor = ConsoleColor.DarkCyan;
-                Console.WriteLine($"[Move] Movimiento recibido -> X: {destX}, Y: {destY}");
-                Console.ResetColor();
-
-                // --- NOTA FUTURA: SISTEMA MULTIJUGADOR (BROADCASTING) ---
-                // Estos paquetes NO se reenvían al propio jugador ('this.SendAsync') porque su cliente 
-                // ya procesa el movimiento de forma local. Si se los devolvemos, causará tirones (rubber-banding).
-                // Cuando el servidor soporte más jugadores, aquí deberás iterar sobre los clientes cercanos
-                // y enviarles a ELLOS estos paquetes de TamerWalk y PartnerWalk:
-                /*
-                await BroadcastToNearbyPlayersAsync(new TamerWalkPacket(destX, destY, TamerHandle).Serialize());
-                await BroadcastToNearbyPlayersAsync(new PartnerWalkPacket(targetDigimonX, targetDigimonY, PartnerHandle).Serialize());
-                */
-
-                // Guardamos en la Base de Datos para que al reloguear aparezcas aquí
                 if (_account != null && _currentCharacter != null)
                 {
-                    Console.WriteLine($"[DB] Actualizando en Mongo -> AccountId: {_account.AccountId}, Slot: {_currentCharacter.Slot}");
                     _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, destX, destY, yaw);
                 }
                 break;
@@ -253,6 +327,25 @@ public sealed class GameClient(TcpClient socket)
             case 1008: // Chat entrante
             {
                 await ChatHandler.HandleAsync(this, packet);
+                break;
+            }
+
+            case 1709: // Petición de portal / teleport
+            {
+                int portalId = packet.ReadInt();
+                short channel = packet.ReadShort();
+
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine($"[Portal 1709] PortalId: {portalId}, Canal: {channel}. Redirigiendo a MapServer en puerto 7035...");
+                Console.ResetColor();
+
+                string mapServerIp = "127.0.0.1";
+                int mapServerPort = 7035; 
+                int targetMapId = 89;     
+                int targetX = 25000;
+                int targetY = 25000;
+
+                await SendAsync(new MapSwapPacket(mapServerIp, mapServerPort, targetMapId, targetX, targetY).Serialize());
                 break;
             }
 
