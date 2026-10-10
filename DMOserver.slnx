@@ -3,5 +3,4 @@
   <Project Path="dmoserver.database/dmoserver.database.csproj" />
   <Project Path="dmoserver.game/dmoserver.game.csproj" />
   <Project Path="dmoserver.login/dmoserver.login.csproj" />
-  <Project Path="dmoserver.map/dmoserver.map.csproj" />
 </Solution>
