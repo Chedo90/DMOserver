@@ -2,70 +2,25 @@ namespace dmoserver.game.Packets;
 
 using dmoserver.game.Network;
 
-public class MobSpawnPacket
+public class MobStatePacket
 {
     private readonly uint _handle;
-    private readonly int _monsterId;
-    private readonly int _x;
-    private readonly int _y;
 
-    public MobSpawnPacket(uint handle, int monsterId, int x, int y)
+    public MobStatePacket(uint handle)
     {
         _handle = handle;
-        _monsterId = monsterId;
-        _x = x;
-        _y = y;
     }
 
     public byte[] Serialize()
     {
-        using var writer = new PacketWriter(1006);
+        using var writer = new PacketWriter(1070); // Opcode 0x042E
 
-        // Acción: 1 = Spawn (Aparecer de la nada), 3 = Load (Entrar en el rango de visión)
-        writer.WriteByte(1); 
-        
-        // Cantidad de monstruos en este paquete
-        writer.WriteShort(1);
+        writer.WriteUInt(_handle);
+        writer.WriteInt(0); // Estado 0 = Idle
 
-        // ---------------- DATOS DEL MONSTRUO ----------------
-        // Previous Location X e Y
-        writer.WriteInt(_x);
-        writer.WriteInt(_y);
-
-        // GeneralHandler (ID único en memoria)
-        writer.WriteInt((int)_handle);
-
-        // Type / MonsterID (El ID real del monstruo, ej: 30419)
-        writer.WriteInt(_monsterId);
-
-        // Current Location X e Y
-        writer.WriteInt(_x);
-        writer.WriteInt(_y);
-
-        // CurrentHpRate (Porcentaje de vida al 100%)
-        writer.WriteByte(100);
-
-        // Level (Nivel del monstruo)
-        writer.WriteShort(1);
-
-        // Skill Idx (2 por defecto en el emulador antiguo)
-        writer.WriteShort(2);
-
-        // GrowStack (0 = Escala normal)
-        writer.WriteInt(0);
-
-        // SyncCondition (0 = NormalState)
-        writer.WriteInt(0);
-
-        // DisposedObjects
-        writer.WriteInt(0);
-
-        // Padding final de la entidad
-        writer.WriteByte(0);
-        // ----------------------------------------------------
-
-        // Cierre del paquete
-        writer.WriteInt(0);
+        // Delimitador de verificación de 1070
+        writer.WriteByte(0x32);
+        writer.WriteByte(0x1A);
 
         return writer.Serialize();
     }

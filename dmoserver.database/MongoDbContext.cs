@@ -2,17 +2,21 @@ namespace dmoserver.database;
 
 using MongoDB.Driver;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 public sealed class MongoDbContext
 {
+    private readonly IMongoDatabase _database;
     private readonly IMongoCollection<GameAccount> _accounts;
 
     public MongoDbContext(string connectionString = "mongodb://localhost:27017", string databaseName = "DmoServer")
     {
         var client = new MongoClient(connectionString);
-        var database = client.GetDatabase(databaseName);
-        _accounts = database.GetCollection<GameAccount>("Accounts");
+        
+        // Guardamos la base de datos a nivel de clase para que otras colecciones puedan usarla
+        _database = client.GetDatabase(databaseName); 
+        _accounts = _database.GetCollection<GameAccount>("Accounts");
 
         var accountIdIndex = new CreateIndexModel<GameAccount>(
             Builders<GameAccount>.IndexKeys.Ascending(a => a.AccountId),
@@ -168,5 +172,15 @@ public sealed class MongoDbContext
             .Set("Characters.$.Location.Z", z);
 
         await _accounts.UpdateOneAsync(filter, update);
+    }
+    
+    // Colección de los spawns
+    public IMongoCollection<MobSpawnDocument> MobSpawns => _database.GetCollection<MobSpawnDocument>("mob_spawns");
+
+    // Método para obtener todos los monstruos de un mapa específico
+    public async Task<List<MobSpawnDocument>> GetSpawnsByMapIdAsync(int mapId)
+    {
+        var filter = Builders<MobSpawnDocument>.Filter.Eq(x => x.MapId, mapId);
+        return await MobSpawns.Find(filter).ToListAsync();
     }
 }

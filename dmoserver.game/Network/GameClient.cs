@@ -24,9 +24,9 @@ public sealed class GameClient(TcpClient socket)
 
     private GameAccount? _account;
     private CharacterDocument? _currentCharacter;
-    private string? _selectedCharacterName; 
+    private string? _selectedCharacterName;
 
-    // Variables de posición
+    // Variables de posición y estado
     private int _currentTamerX;
     private int _currentTamerY;
     private bool _testMobSpawned = false;
@@ -141,7 +141,7 @@ public sealed class GameClient(TcpClient socket)
         }
         finally
         {
-            if (_account != null && _currentCharacter != null)
+            if (_account != null && _currentCharacter != null && _currentTamerX > 0 && _currentTamerY > 0)
             {
                 _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, _currentTamerX, _currentTamerY, 0f);
             }
@@ -181,7 +181,7 @@ public sealed class GameClient(TcpClient socket)
                 if (_account == null)
                 {
                     uint accountIdToSearch = _accountId > 0 ? _accountId : 1;
-                    _account = await Db.GetAccountByIdAsync(accountIdToSearch) 
+                    _account = await Db.GetAccountByIdAsync(accountIdToSearch)
                                ?? await Db.GetOrCreateAccountAsync(accountIdToSearch);
                     if (_account != null) _accountId = _account.AccountId;
                 }
@@ -190,20 +190,23 @@ public sealed class GameClient(TcpClient socket)
 
                 var freshAccount = await Db.GetAccountByIdAsync(_account.AccountId);
                 if (freshAccount != null) _account = freshAccount;
-                
+
                 _account.Characters ??= [];
                 if (_account.Characters.Count == 0) break;
 
                 if (!string.IsNullOrEmpty(_selectedCharacterName))
                     _currentCharacter = _account.Characters.FirstOrDefault(c => c.Name.Equals(_selectedCharacterName, StringComparison.OrdinalIgnoreCase));
-                
+
                 _currentCharacter ??= _account.Characters.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot);
                 _currentCharacter ??= _account.Characters.OrderByDescending(c => c.Slot).FirstOrDefault() ?? _account.Characters[0];
 
                 if (_currentCharacter.Location == null || (_currentCharacter.Location.X == 0 && _currentCharacter.Location.Y == 0))
                 {
-                    _currentCharacter.Location = new CharacterLocation { MapId = _currentCharacter.Location?.MapId ?? 1, X = 15000, Y = 15000, Z = 0f };
+                    _currentCharacter.Location = new CharacterLocation { MapId = _currentCharacter.Location?.MapId ?? 1, X = 27993, Y = 29095, Z = 0f };
                 }
+
+                _currentTamerX = _currentCharacter.Location.X;
+                _currentTamerY = _currentCharacter.Location.Y;
 
                 if (_currentCharacter.Partner == null) break;
 
@@ -225,79 +228,69 @@ public sealed class GameClient(TcpClient socket)
                 ).Serialize();
 
                 await SendAsync(initialInfo);
+
+                // Sincronización de vida y maná completos
+                var tamerStatus = new dmoserver.game.Packets.UpdateStatusPacket(TamerHandle, 1000, 1000, 500, 500);
+                await SendAsync(tamerStatus.Serialize());
+
+                var partnerStatus = new dmoserver.game.Packets.UpdateStatusPacket(PartnerHandle, 1000, 1000, 500, 500);
+                await SendAsync(partnerStatus.Serialize());
+
                 break;
             }
 
-           case 1001: // Pantalla de carga terminada
+case 1001:
 {
-    if (!_testMobSpawned)
+    if (!_testMobSpawned && _currentCharacter != null)
     {
-        uint testMobHandle = 65706; 
-        int monsterId = 30419; // Agumon (MonsterID extraído del XML)
-        int mobX = 27993;
-        int mobY = 29095;
+        int mapId = _currentCharacter.Location.MapId;
+        var mapSpawns = await Db.GetSpawnsByMapIdAsync(mapId);
 
-        // 1. Invocación física en el punto exacto validado
-        var spawnPacket = new dmoserver.game.Packets.MobSpawnPacket(testMobHandle, monsterId, mobX, mobY);
-        await SendAsync(spawnPacket.Serialize());
+        uint idx = 0;
+        foreach (var spawn in mapSpawns)
+        {
+            if (idx > 0x3FFF) break; // límite del rango de mobs
 
-        // 2. Activación de estado Idle (1070)
-        var statePacket = new dmoserver.game.Packets.MobStatePacket(testMobHandle);
-        await SendAsync(statePacket.Serialize());
+            uint mobHandle = 0x10000u | idx++;
 
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"[+] Agumon (ID: {monsterId}) invocado en X:{mobX} Y:{mobY}");
-        Console.ResetColor();
+            await SendAsync(new dmoserver.game.Packets.MobSpawnPacket(
+                mobHandle, spawn.MonsterId, spawn.X, spawn.Y, 1).Serialize());
+            await SendAsync(new dmoserver.game.Packets.MobStatePacket(mobHandle).Serialize());
+
+            Console.WriteLine($"[Mongo] Type {spawn.MonsterId} X:{spawn.X} Y:{spawn.Y} handle=0x{mobHandle:X}");
+        }
 
         _testMobSpawned = true;
     }
     break;
 }
 
-           case 1004: // SyncMovement
-{
-    packet.ReadUInt();
-    packet.ReadShort();
-    packet.ReadShort();
-    int destX = packet.ReadInt();
-    int destY = packet.ReadInt();
-    float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
+            case 1713: // Solo log, no hace nada por ahora
+            {
+                Console.WriteLine("[1713] recibido (ignorado en esta prueba)");
+                break;
+            }
 
-    _currentTamerX = destX;
-    _currentTamerY = destY;
+            case 1004: // SyncMovement
+            {
+                packet.ReadUInt();
+                packet.ReadShort();
+                packet.ReadShort();
+                int destX = packet.ReadInt();
+                int destY = packet.ReadInt();
+                float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
 
-    if (_account != null && _currentCharacter != null)
-    {
-        _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, destX, destY, yaw);
-    }
+                _currentTamerX = destX;
+                _currentTamerY = destY;
 
-    // Invocamos a Agumon con tu primer movimiento en las coordenadas que fijaste
-    if (!_testMobSpawned)
-    {
-        uint testMobHandle = 65706; 
-        int monsterId = 30419; // Agumon
-        int mobX = 27993;
-        int mobY = 29095;
+                if (_account != null && _currentCharacter != null)
+                {
+                    _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, destX, destY, yaw);
+                }
+                break;
+            }
 
-        // 1. Invocación física (1006)
-        var spawnPacket = new dmoserver.game.Packets.MobSpawnPacket(testMobHandle, monsterId, mobX, mobY);
-        await SendAsync(spawnPacket.Serialize());
-
-        // 2. Activación de estado (1070)
-        var statePacket = new dmoserver.game.Packets.MobStatePacket(testMobHandle);
-        await SendAsync(statePacket.Serialize());
-
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"[+] Agumon (ID: {monsterId}) invocado en X:{mobX} Y:{mobY}");
-        Console.ResetColor();
-
-        _testMobSpawned = true;
-    }
-    break;
-}
-
-            // --- INTEGRACIÓN: Sistema de Ataque / Combate ---
-            case 1013: 
+            case 1013: // Ataque / Combate
             {
                 await dmoserver.game.Handlers.CombatHandler.HandleAttackRequestAsync(this, packet);
                 break;
@@ -356,5 +349,15 @@ public sealed class GameClient(TcpClient socket)
             await _stream.WriteAsync(data.AsMemory());
             await _stream.FlushAsync();
         }
+    }
+
+    private void LogPacketHex(string title, byte[] packet)
+    {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"\n--- [HEX DUMP: {title}] ---");
+        Console.WriteLine($"Longitud total: {packet.Length} bytes");
+        Console.WriteLine(BitConverter.ToString(packet).Replace("-", " "));
+        Console.WriteLine("------------------------------------------");
+        Console.ResetColor();
     }
 }
