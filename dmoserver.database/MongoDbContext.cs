@@ -174,13 +174,27 @@ public sealed class MongoDbContext
         await _accounts.UpdateOneAsync(filter, update);
     }
     
+    // ==========================================
+    // COLECCIONES Y MÉTODOS DEL MAPA / MONSTRUOS
+    // ==========================================
+
     // Colección de los spawns
     public IMongoCollection<MobSpawnDocument> MobSpawns => _database.GetCollection<MobSpawnDocument>("mob_spawns");
+
+    // Colección de las plantillas (Stats) de los monstruos
+    public IMongoCollection<MonsterTemplateDocument> MonsterTemplates => _database.GetCollection<MonsterTemplateDocument>("monster_templates");
 
     // Método para obtener todos los monstruos de un mapa específico
     public async Task<List<MobSpawnDocument>> GetSpawnsByMapIdAsync(int mapId)
     {
         var filter = Builders<MobSpawnDocument>.Filter.Eq(x => x.MapId, mapId);
         return await MobSpawns.Find(filter).ToListAsync();
+    }
+
+    // Método para buscar los stats base de una especie de monstruo
+    public async Task<MonsterTemplateDocument?> GetMonsterTemplateAsync(uint monsterId)
+    {
+        var filter = Builders<MonsterTemplateDocument>.Filter.Eq(m => m.MonsterId, monsterId);
+        return await MonsterTemplates.Find(filter).FirstOrDefaultAsync();
     }
 }

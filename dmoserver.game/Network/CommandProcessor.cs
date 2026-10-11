@@ -23,8 +23,8 @@ public static class CommandProcessor
             case "coordenadas":
             case "pos":
             {
-                // Asumiendo que client.CurrentTamerX y Y siguen existiendo en tu código actual
-                await client.SendChatMessageAsync($"Posición actual: X={client.CurrentTamerX}, Y={client.CurrentTamerY}");
+                // Asumiendo que client.Player.X y Y siguen existiendo en tu código actual
+                await client.SendChatMessageAsync($"Posición actual: X={client.Player.X}, Y={client.Player.Y}");
                 break;
             }
 

@@ -10,10 +10,10 @@ public static class ChatHandler
     public static async Task HandleAsync(GameClient client, GamePacketReader packet)
     {
         string message = packet.ReadString();
-        string senderName = client.CurrentCharacter?.Name ?? "Tamer";
+        string senderName = client.Player.Character?.Name ?? "Tamer";
         
         // ¡Usamos el Handle dinámico del personaje conectado!
-        uint tamerHandle = client.TamerHandle; 
+        uint tamerHandle = client.Player.TamerHandle; 
 
         Console.ForegroundColor = ConsoleColor.White;
         Console.WriteLine($"[Chat recibido] {senderName}: {message}");

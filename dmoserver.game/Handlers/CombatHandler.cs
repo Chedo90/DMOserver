@@ -1,48 +1,85 @@
 namespace dmoserver.game.Handlers;
 
+using dmoserver.game.Network;
+using dmoserver.game.Packets;
 using System;
 using System.Threading.Tasks;
-using dmoserver.game.Network;
 
 public static class CombatHandler
 {
-    // Manejo del paquete entrante 1013 (Petición de ataque del cliente)
     public static async Task HandleAttackRequestAsync(GameClient client, GamePacketReader packet)
     {
-        // 1. Leer datos enviados por el cliente al hacer clic en el mob
-        uint targetHandle = packet.ReadUInt(); // Handle del enemigo seleccionado (ej: 65706)
+        uint attackerHandle = packet.ReadUInt();
+        uint targetHandle = packet.ReadUInt();
+        short animationExtra = packet.ReadShort();
+
+        // ==========================================
+        // 1. LOG DE DIAGNÓSTICO INICIAL
+        // ==========================================
+        Console.WriteLine($"[DEBUG] Petición 1013 recibida | Atacante: {attackerHandle:X} | Target: {targetHandle:X} | Mapa Asignado: {client.CurrentMap != null}");
+
+        var targetMonster = client.CurrentMap?.GetMonster(targetHandle);
         
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"[Combate] El Tamer ordenó atacar a la entidad: {targetHandle}");
-        Console.ResetColor();
-
-        // 2. Paquete de confirmación de combate / fijar objetivo (Opcode 1020 / 0x03FC)
-        using (var writer = new PacketWriter(1020))
+        if (targetMonster == null)
         {
-            writer.WriteUInt(client.PartnerHandle); // Quién ataca (tu Digimon compañero)
-            writer.WriteUInt(targetHandle);         // Quién recibe el ataque
-            writer.WriteByte(1);                    // 1 = Modo combate activo
-            writer.WriteByte(0x24);                 // Terminador de combate
-            writer.WriteByte(0x1A);
-
-            await client.SendAsync(writer.Serialize());
+            Console.WriteLine($"[DEBUG] ERROR: El monstruo con Handle {targetHandle:X} no existe en la memoria del mapa.");
+            return; 
         }
 
-        // 3. Paquete de aplicación de daño y animación de golpe (Opcode 1013 / 0x03F5)
-        int damageDealt = 150;
-        int remainingMobHp = 850;
-
-        using (var writer = new PacketWriter(1013))
+        if (targetMonster.IsDead)
         {
-            writer.WriteUInt(client.PartnerHandle); // Atacante
-            writer.WriteUInt(targetHandle);         // Objetivo
-            writer.WriteInt(damageDealt);           // Daño infligido
-            writer.WriteInt(remainingMobHp);        // Vida restante del mob
-            writer.WriteByte(0);                    // Flags (Crítico, Miss, Bloqueo)
-            writer.WriteByte(0x1C);                 // Terminador 1C 1A
-            writer.WriteByte(0x1A);
+            Console.WriteLine($"[DEBUG] Ignorado: El monstruo {targetHandle:X} ya está marcado como muerto.");
+            return;
+        }
 
-            await client.SendAsync(writer.Serialize());
+        // ==========================================
+        // 2. CÁLCULO DE DAÑO BASADO EN STATS REALES
+        // ==========================================
+        // Leemos el AT real del Partner del jugador (fallback a 100 si client.Player fuera nulo)
+        int attackerAtk = client.Player?.PartnerStats.Attack ?? 100;
+        int targetDef = targetMonster.Stats.Defense;
+
+        // Fórmula: AT - DE (mínimo 1 de daño garantizado)
+        int baseDamage = Math.Max(1, attackerAtk - targetDef);
+        
+        // Variación aleatoria del daño (+/- 5)
+        int variation = Random.Shared.Next(-5, 6);
+        int damage = Math.Max(1, baseDamage + variation);
+        // ==========================================
+
+        bool isKilled = targetMonster.TakeDamage(damage);
+
+        Console.ForegroundColor = isKilled ? ConsoleColor.Yellow : ConsoleColor.Red;
+        Console.WriteLine($"[⚔️ Combate] {attackerHandle:X} ataca a {targetHandle:X} por {damage} (AT: {attackerAtk} vs DE: {targetDef}). Muerto: {isKilled}");
+        Console.ResetColor();
+
+        if (isKilled)
+        {
+            var killPacket = new KillOnHitPacket
+            {
+                AttackerHandle = attackerHandle,
+                TargetHandle = targetHandle,
+                Damage = damage,
+                HitType = 0
+            };
+
+            client.CurrentMap.Broadcast(killPacket.Serialize());
+            
+            targetMonster.NextActionTime = DateTime.UtcNow.AddSeconds(7); // Respawn en 7s
+        }
+        else
+        {
+            var hitPacket = new CombatHitPacket
+            {
+                AttackerHandle = attackerHandle,
+                TargetHandle = targetHandle,
+                Damage = damage,
+                HitType = 0,
+                TargetHp = targetMonster.CurrentHp,
+                TargetMaxHp = targetMonster.Stats.MaxHp
+            };
+
+            client.CurrentMap.Broadcast(hitPacket.Serialize());
         }
     }
 }

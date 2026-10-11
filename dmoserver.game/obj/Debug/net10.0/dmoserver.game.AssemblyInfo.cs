@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("dmoserver.game")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+36fe9f6555615a8ed747cd6b7b2af5a9c35ffd87")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5273e36ec5cf27e459ea7d4d058e0e7f14266fab")]
 [assembly: System.Reflection.AssemblyProductAttribute("dmoserver.game")]
 [assembly: System.Reflection.AssemblyTitleAttribute("dmoserver.game")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

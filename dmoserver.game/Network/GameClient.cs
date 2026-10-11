@@ -8,37 +8,37 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using dmoserver.database;
+using dmoserver.game.Managers;
+using dmoserver.game.Maps;
+using dmoserver.game.Entities;
+using dmoserver.game.Handlers;
+using dmoserver.game.Packets;
+using dmoserver.game.Packets.Entities;
 
 public sealed class GameClient(TcpClient socket)
 {
     private const short HandshakeDegree = 32321;
     private const int OnConnectEventHandshakeHandler = 65535;
 
-    private static readonly MongoDbContext Db = new();
+    internal static readonly MongoDbContext Db = new();
 
     public TcpClient Socket { get; } = socket;
+    public string EndPoint => _endPoint;
 
     private readonly NetworkStream _stream = socket.GetStream();
     private readonly string _endPoint = socket.Client.RemoteEndPoint?.ToString() ?? "Desconocido";
     private short _clientHandshake;
 
-    private GameAccount? _account;
-    private CharacterDocument? _currentCharacter;
-    private string? _selectedCharacterName;
+    public PlayerEntity Player { get; } = new();
+    public MapInstance? CurrentMap { get; private set; }
 
-    // Variables de posición y estado
-    private int _currentTamerX;
-    private int _currentTamerY;
-    private bool _testMobSpawned = false;
+    public void SetCurrentMap(MapInstance map) => CurrentMap = map;
 
-    public CharacterDocument? CurrentCharacter => _currentCharacter;
-    public int CurrentTamerX => _currentTamerX;
-    public int CurrentTamerY => _currentTamerY;
-    private uint _accountId;
-    private string? _sessionToken;
-
-    public uint TamerHandle => _currentCharacter != null ? (uint)(32768 + _currentCharacter.Slot) : 32768;
-    public uint PartnerHandle => _currentCharacter != null ? (uint)(2000 + _currentCharacter.Slot) : 2000;
+    private static string Hex(byte[] data, int length)
+    {
+        int len = Math.Min(length, data.Length);
+        return BitConverter.ToString(data, 0, len).Replace("-", "");
+    }
 
     public async Task StartAsync()
     {
@@ -81,13 +81,11 @@ public sealed class GameClient(TcpClient socket)
                 byte[] packetData = ArrayPool<byte>.Shared.Rent(packetLength);
                 try
                 {
-                    Array.Copy(lengthBuffer, 0, packetData, 0, 2);
-                    int payloadLength = packetLength - 2;
+                    await _stream.ReadExactlyAsync(packetData.AsMemory(2, packetLength - 2));
+                    packetData[0] = lengthBuffer[0];
+                    packetData[1] = lengthBuffer[1];
 
-                    if (payloadLength > 0)
-                    {
-                        await _stream.ReadExactlyAsync(packetData.AsMemory(2, payloadLength));
-                    }
+                    int payloadLength = packetLength - 2;
 
                     if (payloadLength >= 7)
                     {
@@ -95,21 +93,17 @@ public sealed class GameClient(TcpClient socket)
                         if (headerText.Equals("DMIPASS", StringComparison.Ordinal))
                         {
                             string fullPayload = Encoding.ASCII.GetString(packetData, 2, payloadLength);
-                            Console.ForegroundColor = ConsoleColor.Cyan;
-                            Console.WriteLine($"[GameServer] Paquete DMIPASS interceptado correctamente.");
-                            Console.ResetColor();
-
                             string[] parts = fullPayload.Split(' ');
                             if (parts.Length > 1)
                             {
-                                _sessionToken = parts[1];
-                                _account = await Db.GetAccountBySessionTokenAsync(_sessionToken);
+                                Player.SessionToken = parts[1];
+                                Player.Account = await Db.GetAccountBySessionTokenAsync(Player.SessionToken);
 
-                                if (_account != null)
+                                if (Player.Account != null)
                                 {
-                                    _accountId = _account.AccountId;
+                                    Player.AccountId = Player.Account.AccountId;
                                     Console.ForegroundColor = ConsoleColor.Green;
-                                    Console.WriteLine($"[Auth] Sesión validada para la cuenta ID {_accountId}");
+                                    Console.WriteLine($"[Auth] Sesión validada para la cuenta ID {Player.AccountId}");
                                     Console.ResetColor();
                                 }
                             }
@@ -121,11 +115,11 @@ public sealed class GameClient(TcpClient socket)
                     if (packet.Type != 1004 && packet.Type != -3)
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"[<-] Paquete recibido: Opcode {packet.Type} (Tamaño: {packetLength})");
+                        Console.WriteLine($"[<-] Paquete recibido: Opcode {packet.Type} (Tamaño: {packet.Length})");
                         Console.ResetColor();
                     }
 
-                    await ProcessPacketAsync(packet, packetData);
+                    await ProcessPacketAsync(packet, packetData, packetLength);
                 }
                 finally
                 {
@@ -141,16 +135,18 @@ public sealed class GameClient(TcpClient socket)
         }
         finally
         {
-            if (_account != null && _currentCharacter != null && _currentTamerX > 0 && _currentTamerY > 0)
+            CurrentMap?.Players.TryRemove(_endPoint, out _);
+
+            if (Player.Account != null && Player.Character != null && Player.X > 0 && Player.Y > 0)
             {
-                _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, _currentTamerX, _currentTamerY, 0f);
+                _ = Db.UpdatePositionAsync(Player.Account.AccountId, Player.Character.Slot, Player.X, Player.Y, 0f);
             }
             Socket.Close();
             Console.WriteLine($"[-] Conexión con {_endPoint} cerrada.");
         }
     }
 
-    private async Task ProcessPacketAsync(GamePacketReader packet, byte[] rawData)
+    private async Task ProcessPacketAsync(GamePacketReader packet, byte[] rawData, int packetLength)
     {
         switch (packet.Type)
         {
@@ -159,7 +155,7 @@ public sealed class GameClient(TcpClient socket)
                 packet.ReadByte();
                 var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var handshake = (short)(_clientHandshake ^ HandshakeDegree);
-                byte[] connResponse = new dmoserver.game.Packets.ConnectionPacket(handshake, handshakeTimestamp).Serialize();
+                byte[] connResponse = new ConnectionPacket(handshake, handshakeTimestamp).Serialize();
                 await SendAsync(connResponse);
                 break;
             }
@@ -169,105 +165,60 @@ public sealed class GameClient(TcpClient socket)
 
             case 1302:
             {
-                _selectedCharacterName = packet.ReadString();
+                Player.SelectedCharacterName = packet.ReadString();
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[Selección] El cliente eligió al Tamer: {_selectedCharacterName}");
+                Console.WriteLine($"[Selección] El cliente eligió al Tamer: {Player.SelectedCharacterName}");
                 Console.ResetColor();
                 break;
             }
 
-            case 1706: // InitialInformation
+            case 1706: // InitialInformation delegado a LoginWorldHandler
             {
-                if (_account == null)
-                {
-                    uint accountIdToSearch = _accountId > 0 ? _accountId : 1;
-                    _account = await Db.GetAccountByIdAsync(accountIdToSearch)
-                               ?? await Db.GetOrCreateAccountAsync(accountIdToSearch);
-                    if (_account != null) _accountId = _account.AccountId;
-                }
-
-                if (_account == null) break;
-
-                var freshAccount = await Db.GetAccountByIdAsync(_account.AccountId);
-                if (freshAccount != null) _account = freshAccount;
-
-                _account.Characters ??= [];
-                if (_account.Characters.Count == 0) break;
-
-                if (!string.IsNullOrEmpty(_selectedCharacterName))
-                    _currentCharacter = _account.Characters.FirstOrDefault(c => c.Name.Equals(_selectedCharacterName, StringComparison.OrdinalIgnoreCase));
-
-                _currentCharacter ??= _account.Characters.FirstOrDefault(c => c.Slot == _account.LastPlayedSlot);
-                _currentCharacter ??= _account.Characters.OrderByDescending(c => c.Slot).FirstOrDefault() ?? _account.Characters[0];
-
-                if (_currentCharacter.Location == null || (_currentCharacter.Location.X == 0 && _currentCharacter.Location.Y == 0))
-                {
-                    _currentCharacter.Location = new CharacterLocation { MapId = _currentCharacter.Location?.MapId ?? 1, X = 27993, Y = 29095, Z = 0f };
-                }
-
-                _currentTamerX = _currentCharacter.Location.X;
-                _currentTamerY = _currentCharacter.Location.Y;
-
-                if (_currentCharacter.Partner == null) break;
-
-                int mapId = _currentCharacter.Location.MapId;
-
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[Login] Cargando Tamer: {_currentCharacter.Name} en Mapa {mapId}");
-                Console.ResetColor();
-
-                byte[] initialInfo = new dmoserver.game.Packets.InitialInfoPacket(
-                    _currentCharacter.Name,
-                    _currentCharacter.Partner.Name,
-                    _currentCharacter.Model,
-                    _currentCharacter.Partner.Model,
-                    TamerHandle,
-                    PartnerHandle,
-                    _currentCharacter.Location.X,
-                    _currentCharacter.Location.Y
-                ).Serialize();
-
-                await SendAsync(initialInfo);
-
-                // Sincronización de vida y maná completos
-                var tamerStatus = new dmoserver.game.Packets.UpdateStatusPacket(TamerHandle, 1000, 1000, 500, 500);
-                await SendAsync(tamerStatus.Serialize());
-
-                var partnerStatus = new dmoserver.game.Packets.UpdateStatusPacket(PartnerHandle, 1000, 1000, 500, 500);
-                await SendAsync(partnerStatus.Serialize());
-
+                await LoginWorldHandler.HandleInitialInformationAsync(this, packet);
                 break;
             }
 
-case 1001:
-{
-    if (!_testMobSpawned && _currentCharacter != null)
-    {
-        int mapId = _currentCharacter.Location.MapId;
-        var mapSpawns = await Db.GetSpawnsByMapIdAsync(mapId);
-
-        uint idx = 0;
-        foreach (var spawn in mapSpawns)
-        {
-            if (idx > 0x3FFF) break; // límite del rango de mobs
-
-            uint mobHandle = 0x10000u | idx++;
-
-            await SendAsync(new dmoserver.game.Packets.MobSpawnPacket(
-                mobHandle, spawn.MonsterId, spawn.X, spawn.Y, 1).Serialize());
-            await SendAsync(new dmoserver.game.Packets.MobStatePacket(mobHandle).Serialize());
-
-            Console.WriteLine($"[Mongo] Type {spawn.MonsterId} X:{spawn.X} Y:{spawn.Y} handle=0x{mobHandle:X}");
-        }
-
-        _testMobSpawned = true;
-    }
-    break;
-}
-
-            case 1713: // Solo log, no hace nada por ahora
+            case 1001: // Pantalla de carga terminada
             {
-                Console.WriteLine("[1713] recibido (ignorado en esta prueba)");
+                if (Player.Character != null && Player.LastLoadedMapId != Player.Character.Location.MapId)
+                {
+                    int mapId = Player.Character.Location.MapId;
+
+                    CurrentMap ??= MapManager.GetOrCreateMap(mapId);
+                    CurrentMap.Players.TryAdd(_endPoint, this);
+
+                    await CurrentMap.LoadSpawnsAsync(Db);
+
+                    foreach (var mob in CurrentMap.Monsters.Values)
+                    {
+                        await SendAsync(new MobSpawnPacket(
+                        mob.Handle, (int)mob.ModelId, mob.X, mob.Y, (byte)mob.Stats.Level).Serialize());
+
+                        await SendAsync(new MobStatePacket(mob.Handle).Serialize());
+                    }
+
+                    Player.LastLoadedMapId = mapId;
+                }
+                break;
+            }
+
+            case 1016: // Selección de objetivo
+            {
+                Console.WriteLine($"[1016 RAW] {Hex(rawData, packetLength)}");
+                TargetHandler.HandleTargetSelection(this, packet);
+                break;
+            }
+
+            case 1033: // Desconocido: solo lo volcamos
+            {
+                Console.WriteLine($"[1033 RAW] {Hex(rawData, packetLength)}");
+                // Aquí puedes agregar la lógica específica para el opcode 1033
+                break;
+            }
+
+            case 1713:
+            {
+                Console.WriteLine("[1713] recibido (ignorado)");
                 break;
             }
 
@@ -280,25 +231,28 @@ case 1001:
                 int destY = packet.ReadInt();
                 float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
 
-                _currentTamerX = destX;
-                _currentTamerY = destY;
+                Player.X = destX;
+                Player.Y = destY;
+                Player.Yaw = yaw;
 
-                if (_account != null && _currentCharacter != null)
+                if (Player.Account != null && Player.Character != null)
                 {
-                    _ = Db.UpdatePositionAsync(_account.AccountId, _currentCharacter.Slot, destX, destY, yaw);
+                    _ = Db.UpdatePositionAsync(Player.Account.AccountId, Player.Character.Slot, destX, destY, yaw);
                 }
                 break;
             }
 
-            case 1013: // Ataque / Combate
+            case 1013: // Ataque básico
+            case 1022: // Auto-ataque continuo
             {
-                await dmoserver.game.Handlers.CombatHandler.HandleAttackRequestAsync(this, packet);
+                Console.WriteLine($"[{packet.Type} RAW] {Hex(rawData, packetLength)}");
+                await CombatHandler.HandleAttackRequestAsync(this, packet);
                 break;
             }
 
             case 1008: // Chat
             {
-                await dmoserver.game.Handlers.ChatHandler.HandleAsync(this, packet);
+                await ChatHandler.HandleAsync(this, packet);
                 break;
             }
 
@@ -306,7 +260,10 @@ case 1001:
             {
                 int portalId = packet.ReadInt();
                 short channel = packet.ReadShort();
-                await SendAsync(new dmoserver.game.Packets.MapSwapPacket("127.0.0.1", 7035, 89, 25000, 25000).Serialize());
+
+                CurrentMap?.Players.TryRemove(_endPoint, out _);
+
+                await SendAsync(new MapSwapPacket("127.0.0.1", 7035, 89, 25000, 25000).Serialize());
                 break;
             }
 
@@ -325,21 +282,21 @@ case 1001:
 
     public async Task SendChatMessageAsync(string text)
     {
-        byte[] msg = new dmoserver.game.Packets.ChatMessagePacket(TamerHandle, text, 0).Serialize();
+        byte[] msg = new ChatMessagePacket(Player.TamerHandle, text, 0).Serialize();
         await SendAsync(msg);
     }
 
     public async Task TeleportAsync(int x, int y)
     {
-        _currentTamerX = x;
-        _currentTamerY = y;
-        await SendAsync(new dmoserver.game.Packets.TamerTeleportPacket(x, y, TamerHandle).Serialize());
-        await SendAsync(new dmoserver.game.Packets.PartnerTeleportPacket(x, y, PartnerHandle).Serialize());
+        Player.X = x;
+        Player.Y = y;
+        await SendAsync(new TamerTeleportPacket(x, y, Player.TamerHandle).Serialize());
+        await SendAsync(new PartnerTeleportPacket(x, y, Player.PartnerHandle).Serialize());
     }
 
     public async Task SetSpeedAsync(short speed)
     {
-        await SendAsync(new dmoserver.game.Packets.UpdateMovementSpeedPacket(TamerHandle, PartnerHandle, speed).Serialize());
+        await SendAsync(new UpdateMovementSpeedPacket(Player.TamerHandle, Player.PartnerHandle, speed).Serialize());
     }
 
     public async Task SendAsync(byte[] data)
@@ -349,15 +306,5 @@ case 1001:
             await _stream.WriteAsync(data.AsMemory());
             await _stream.FlushAsync();
         }
-    }
-
-    private void LogPacketHex(string title, byte[] packet)
-    {
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"\n--- [HEX DUMP: {title}] ---");
-        Console.WriteLine($"Longitud total: {packet.Length} bytes");
-        Console.WriteLine(BitConverter.ToString(packet).Replace("-", " "));
-        Console.WriteLine("------------------------------------------");
-        Console.ResetColor();
     }
 }
