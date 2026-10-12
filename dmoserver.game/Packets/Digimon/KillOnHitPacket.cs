@@ -11,13 +11,13 @@ public class KillOnHitPacket
 
     public byte[] Serialize()
     {
-        using var writer = new PacketWriter(1020); // Opcode 1020 = Muerte por golpe
+        using var writer = new PacketWriter(1020);
 
         writer.WriteUInt(AttackerHandle);
         writer.WriteUInt(TargetHandle);
-        writer.WriteInt(-Damage); // DMO requiere que el daño de muerte vaya en negativo
+        writer.WriteInt(-Damage);
         writer.WriteInt(HitType);
-        writer.WriteShort(0);     // Los 2 bytes de relleno del final
+        writer.WriteShort(0);
 
         return writer.Serialize();
     }

@@ -15,6 +15,7 @@ using dmoserver.game.Handlers;
 using dmoserver.game.Packets;
 using dmoserver.game.Packets.Entities;
 
+
 public sealed class GameClient(TcpClient socket)
 {
     private const short HandshakeDegree = 32321;
@@ -28,6 +29,7 @@ public sealed class GameClient(TcpClient socket)
     private readonly NetworkStream _stream = socket.GetStream();
     private readonly string _endPoint = socket.Client.RemoteEndPoint?.ToString() ?? "Desconocido";
     private short _clientHandshake;
+    private DateTime _lastPositionSave = DateTime.MinValue;
 
     public PlayerEntity Player { get; } = new();
     public MapInstance? CurrentMap { get; private set; }
@@ -173,11 +175,31 @@ public sealed class GameClient(TcpClient socket)
             }
 
             case 1706: // InitialInformation delegado a LoginWorldHandler
-            {
-                await LoginWorldHandler.HandleInitialInformationAsync(this, packet);
-                break;
-            }
+{
+    // 1. Extraemos el AccountId que el cliente envía al saltar al Game Server
+    packet.Seek(8);
+    uint incomingAccountId = packet.ReadUInt();
 
+    if (incomingAccountId > 0)
+    {
+        // Asignamos el AccountId real a la sesión actual en memoria
+        Player.AccountId = incomingAccountId;
+        
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"[+] [GameServer] Cliente autorizado entrando al mundo con AccountId: {incomingAccountId}");
+        Console.ResetColor();
+    }
+    else
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("[!] [GameServer] Advertencia: El AccountId recibido es 0.");
+        Console.ResetColor();
+    }
+
+    // 2. Ahora delegamos al handler. Como Player.AccountId ya tiene el ID correcto, cargará sus propios personajes.
+    await LoginWorldHandler.HandleInitialInformationAsync(this, packet);
+    break;
+}
             case 1001: // Pantalla de carga terminada
             {
                 if (Player.Character != null && Player.LastLoadedMapId != Player.Character.Location.MapId)
@@ -222,31 +244,47 @@ public sealed class GameClient(TcpClient socket)
                 break;
             }
 
-            case 1004: // SyncMovement
-            {
-                packet.ReadUInt();
-                packet.ReadShort();
-                packet.ReadShort();
-                int destX = packet.ReadInt();
-                int destY = packet.ReadInt();
-                float yaw = BitConverter.Int32BitsToSingle(packet.ReadInt());
+case 1004: // SyncMovement
+{
+    packet.ReadUInt();
+    packet.ReadShort();
+    packet.ReadShort();
+    int destX = packet.ReadInt();
+    int destY = packet.ReadInt();
+    float destZ = BitConverter.Int32BitsToSingle(packet.ReadInt()); // Cambiamos yaw por destZ
 
-                Player.X = destX;
-                Player.Y = destY;
-                Player.Yaw = yaw;
+    Player.X = destX;
+    Player.Y = destY;
+    // Si necesitas guardar el Yaw o Z en PlayerEntity a futuro, lo puedes asignar aquí.
 
-                if (Player.Account != null && Player.Character != null)
-                {
-                    _ = Db.UpdatePositionAsync(Player.Account.AccountId, Player.Character.Slot, destX, destY, yaw);
-                }
-                break;
-            }
+    // AÑADIDO: El log en consola para capturar los puntos de spawn
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine($"[📍 POSICIÓN MAPA] X: {destX} | Y: {destY} | Z: {destZ}");
+    Console.ResetColor();
+
+    // Guardar como máximo cada 5 segundos (al desconectar se guarda igualmente en el finally)
+    var now = DateTime.UtcNow;
+    if (Player.Account != null && Player.Character != null &&
+        (now - _lastPositionSave).TotalSeconds >= 5)
+    {
+        _lastPositionSave = now;
+        // CORREGIDO: Pasamos destZ a la base de datos en lugar de 0f
+        _ = Db.UpdatePositionAsync(Player.Account.AccountId, Player.Character.Slot, destX, destY, destZ);
+    }
+    break;
+}
 
             case 1013: // Ataque básico
             case 1022: // Auto-ataque continuo
             {
                 Console.WriteLine($"[{packet.Type} RAW] {Hex(rawData, packetLength)}");
                 await CombatHandler.HandleAttackRequestAsync(this, packet);
+                break;
+            }
+            case 1015: // Ataque de habilidad
+            {
+                Console.WriteLine($"[{packet.Type} RAW] {Hex(rawData, packetLength)}");
+                await CombatHandler.HandleSkillRequestAsync(this, packet);
                 break;
             }
 

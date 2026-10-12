@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using dmoserver.character.Network;
 using dmoserver.database;
 
@@ -16,7 +18,7 @@ public class CharacterListPacket : PacketWriter
         {
             byte[] emptyItem = new byte[68];
 
-            foreach (var character in characters.Where(c => c.Partner != null))
+            foreach (var character in characters.Where(c => c.Partner != null).OrderBy(c => c.Slot))
             {
                 WriteByte(character.Slot);
                 WriteShort(105); // MapId por defecto (D-Terminal / DATS)

@@ -101,16 +101,28 @@ public sealed class InitialInfoPacket(string tamerName, string digimonName, int 
         writer.WriteInt(0);      // BL
         writer.WriteInt(digimonModel); // BaseType
 
-        // 11. Evolutions (1 forma x 19 bytes)
+       // 11. Evolutions (1 forma x 19 bytes)
         writer.WriteByte(1); // 1 forma evolutiva
         writer.WriteInt(0);  // SkillExperience & Mastery
         writer.WriteByte(1); // Unlocked = 1
         writer.WriteByte(0); // Pad
         writer.WriteByte(0); // Pad
         writer.WriteByte(0); // Pad
-        writer.WriteByte(0); // SkillPoints
-        for (int i = 0; i < 5; i++) writer.WriteByte(0); // CurrentLevel (5 skills)
-        for (int i = 0; i < 5; i++) writer.WriteByte(0); // MaxLevel (5 skills)
+        writer.WriteByte(4); // SkillPoints disponibles para subir
+
+        // Niveles actuales (F1 a F5): F1 y F2 empiezan a nivel 1
+        writer.WriteByte(1); // F1 - Nivel 1
+        writer.WriteByte(1); // F2 - Nivel 1
+        writer.WriteByte(0); // F3 - Nivel 0
+        writer.WriteByte(0); // F4 - Nivel 0
+        writer.WriteByte(0); // F5 - Nivel 0
+
+        // Niveles máximos (F1 a F5): Límite 10
+        writer.WriteByte(10); // F1 Max
+        writer.WriteByte(10); // F2 Max
+        writer.WriteByte(10); // F3 Max
+        writer.WriteByte(10); // F4 Max
+        writer.WriteByte(10); // F5 Max
 
         // 12. Digiclone Stats (15 shorts = 30 bytes)
         for (int i = 0; i < 15; i++) writer.WriteShort(0);

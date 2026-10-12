@@ -1,7 +1,7 @@
-namespace dmoserver.game.Entities;
-
 using dmoserver.database;
-using dmoserver.game.Entities.Stats; // Añadir import
+using dmoserver.game.Entities.Stats;
+
+namespace dmoserver.game.Entities;
 
 public sealed class PlayerEntity
 {
@@ -11,29 +11,31 @@ public sealed class PlayerEntity
     public CharacterDocument? Character { get; set; }
     public string? SelectedCharacterName { get; set; }
 
-    // Estadísticas activas del Digimon compañero
     public DigimonStats PartnerStats { get; set; } = new DigimonStats
     {
         Level = 1,
         MaxHp = 620,
         MaxDs = 240,
-        Attack = 135,       // AT base real de tu Digimon
+        Attack = 135,
         Defense = 28,
         AttackSpeed = 2000,
         HitRate = 500,
         CriticalRate = 5.0f
     };
 
-    // Posición y orientación en tiempo real
+    // Make sure these properties are declared and public
+    public long CurrentExp { get; set; }
+    public int PartnerLevel { get; set; } = 1;
+// Añadir a PlayerEntity.cs
+public long TamerCurrentExp { get; set; }
+public int TamerLevel { get; set; } = 1;
     public int X { get; set; }
     public int Y { get; set; }
     public float Yaw { get; set; }
 
-    // Estado del mapa y targeting
     public int LastLoadedMapId { get; set; } = -1;
     public uint TargetHandle { get; set; }
 
-    // Handles dinámicos oficiales de GDMO
     public uint TamerHandle => Character != null ? (uint)(0x8000 + Character.Slot) : 0x8000;
     public uint PartnerHandle => Character != null ? (uint)(0x4000 + Character.Slot) : 0x4000;
 }

@@ -39,16 +39,37 @@ public static class LoginWorldHandler
         player.Account.Characters ??= [];
         if (player.Account.Characters.Count == 0) return;
 
-        // 3. Selección del personaje (prioridad: nombre elegido > último slot > slot mayor)
+        // 3. Diagnóstico y Selección del personaje
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"[LoginWorld] AccountId: {player.Account.AccountId} | LastPlayedSlot en BD: {player.Account.LastPlayedSlot}");
+        foreach (var c in player.Account.Characters)
+        {
+            Console.WriteLine($"  -> Personaje en BD: '{c.Name}' en Slot {c.Slot}");
+        }
+        Console.ResetColor();
+
+        // 3.1 Prioridad por nombre si fue especificado explícitamente
         if (!string.IsNullOrEmpty(player.SelectedCharacterName))
         {
             player.Character = player.Account.Characters.FirstOrDefault(c =>
                 c.Name.Equals(player.SelectedCharacterName, StringComparison.OrdinalIgnoreCase));
         }
 
+        // 3.2 Buscar por el slot seleccionado guardado en BD
         player.Character ??= player.Account.Characters.FirstOrDefault(c => c.Slot == player.Account.LastPlayedSlot);
-        player.Character ??= player.Account.Characters.OrderByDescending(c => c.Slot).FirstOrDefault()
-                             ?? player.Account.Characters[0];
+
+        // 3.3 Si falla, tomar el primer slot disponible ordenado ascendentemente (slot 0) en lugar del último
+        player.Character ??= player.Account.Characters.OrderBy(c => c.Slot).FirstOrDefault();
+
+        if (player.Character == null)
+        {
+            Console.WriteLine("[LoginWorld] ERROR: No se encontró ningún personaje para esta cuenta.");
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"[LoginWorld] SELECCIONADO CON ÉXITO: '{player.Character.Name}' (Slot {player.Character.Slot})");
+        Console.ResetColor();
 
         // 4. Asegurar coordenadas válidas
         if (player.Character.Location == null || (player.Character.Location.X == 0 && player.Character.Location.Y == 0))

@@ -131,7 +131,7 @@ public sealed class MongoDbContext
                     Name = "takatt",
                     Model = 80001,
                     Level = 1,
-                    Location = new CharacterLocation { MapId = 1, X = 30000, Y = 30000, Z = 0f },
+                    Location = new CharacterLocation { MapId = 1, X = 40000, Y = 40000, Z = 0f },
                     Partner = new PartnerDigimonDocument
                     {
                         Name = "Agumon",
@@ -161,17 +161,57 @@ public sealed class MongoDbContext
 
     public async Task UpdatePositionAsync(uint accountId, byte slot, int x, int y, float z)
     {
-        var filter = Builders<GameAccount>.Filter.And(
-            Builders<GameAccount>.Filter.Eq(a => a.AccountId, accountId),
-            Builders<GameAccount>.Filter.Eq("Characters.Slot", slot)
-        );
+        try
+        {
+            var filter = Builders<GameAccount>.Filter.And(
+                Builders<GameAccount>.Filter.Eq(a => a.AccountId, accountId),
+                Builders<GameAccount>.Filter.ElemMatch(a => a.Characters, c => c.Slot == slot)
+            );
 
-        var update = Builders<GameAccount>.Update
-            .Set("Characters.$.Location.X", x)
-            .Set("Characters.$.Location.Y", y)
-            .Set("Characters.$.Location.Z", z);
+            // Operador posicional estricto "$" para arrays en MongoDB
+            var update = Builders<GameAccount>.Update
+                .Set("characters.$.location.x", x)
+                .Set("characters.$.location.y", y)
+                .Set("characters.$.location.z", z);
 
-        await _accounts.UpdateOneAsync(filter, update);
+            await _accounts.UpdateOneAsync(filter, update);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[MongoDB] Error guardando posición: {ex.Message}");
+            Console.ResetColor();
+        }
+    }
+
+    /// <summary>
+    /// Guarda nivel y experiencia del Tamer y del Digimon partner.
+    /// Usa Update.Set puntual (no reemplaza la cuenta entera).
+    /// </summary>
+    public async Task UpdateProgressAsync(uint accountId, byte slot, short tamerLevel, long tamerExp, short partnerLevel, long partnerExp)
+    {
+        try
+        {
+            var filter = Builders<GameAccount>.Filter.And(
+                Builders<GameAccount>.Filter.Eq(a => a.AccountId, accountId),
+                Builders<GameAccount>.Filter.ElemMatch(a => a.Characters, c => c.Slot == slot)
+            );
+
+            // Operador posicional estricto "$" para arrays en MongoDB
+            var update = Builders<GameAccount>.Update
+                .Set("characters.$.level", tamerLevel)
+                .Set("characters.$.exp", tamerExp)
+                .Set("characters.$.partner.level", partnerLevel)
+                .Set("characters.$.partner.exp", partnerExp);
+
+            await _accounts.UpdateOneAsync(filter, update);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[MongoDB] Error guardando progreso: {ex.Message}");
+            Console.ResetColor();
+        }
     }
     
     // ==========================================

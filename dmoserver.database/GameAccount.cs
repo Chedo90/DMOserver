@@ -48,6 +48,8 @@ public sealed class CharacterDocument
 
     [BsonElement("partner")]
     public PartnerDigimonDocument Partner { get; set; } = new();
+       [BsonElement("exp")]
+    public long Exp { get; set; } = 0;
 }
 
 public sealed class CharacterLocation
@@ -81,4 +83,6 @@ public sealed class PartnerDigimonDocument
 
     [BsonElement("level")]
     public short Level { get; set; } = 1;
+       [BsonElement("exp")]
+    public long Exp { get; set; } = 0;
 }

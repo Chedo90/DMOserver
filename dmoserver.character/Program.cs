@@ -215,32 +215,51 @@ static async Task HandleClientAsync(TcpClient client, MongoDbContext db)
                     break;
                 }
 
-                case CharacterServerPacketEnum.GetCharacterPosition: // Opcode 1305
-                {
-                    byte position = packet.ReadByte();
+case CharacterServerPacketEnum.GetCharacterPosition: // Opcode 1305
+{
+    // 1. Log de depuración para ver todos los bytes crudos del paquete
+    packet.Seek(0);
+    byte[] raw = new byte[packet.Length];
+    for (int i = 0; i < packet.Length; i++) raw[i] = packet.ReadByte();
+    Console.WriteLine($"[1305 DUMP] {BitConverter.ToString(raw)}");
 
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"[+] El jugador entra al juego con el personaje del slot: {position}");
-                    Console.ResetColor();
+    // En paquetes de 10 bytes:
+    // [0-1]: Len | [2-3]: Opcode | [4-7]: Handshake | [8]: Slot (o [4]: Slot)
+    // Extraemos el slot que sea menor a 10 (slots válidos son 0, 1, 2, 3, 4)
+    byte position = 0;
+    if (raw.Length >= 9 && raw[8] < 10)
+    {
+        position = raw[8];
+    }
+    else if (raw.Length >= 5 && raw[4] < 10)
+    {
+        position = raw[4];
+    }
+    else if (raw.Length >= 8 && raw[7] < 10)
+    {
+        position = raw[7];
+    }
 
-                    // Marcamos el slot seleccionado en Mongo
-                    if (currentAccountId > 0)
-                    {
-                        var account = await db.GetOrCreateAccountAsync(currentAccountId);
-                        account.LastPlayedSlot = position;
-                        await db.UpdateAccountAsync(account);
-                    }
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine($"[+] [LOBBY] Personaje seleccionado en SLOT REAL: {position}");
+    Console.ResetColor();
 
-                    // Enviamos IP, puerto del Game Server (7031) y MapId (105)
-                    byte[] infoResponse = new ConnectGameServerInfoPacket("127.0.0.1", "7031", 105).Serialize();
-                    await stream.WriteAsync(infoResponse, 0, infoResponse.Length);
-                    await stream.FlushAsync();
+    if (currentAccountId > 0)
+    {
+        var account = await db.GetOrCreateAccountAsync(currentAccountId);
+        account.LastPlayedSlot = position;
+        await db.UpdateAccountAsync(account);
 
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("[->] ConnectGameServerInfoPacket (1308) enviado con destino a 127.0.0.1:7031 (Mapa 105).");
-                    Console.ResetColor();
-                    break;
-                }
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"[✓] MongoDB actualizado: LastPlayedSlot = {position} para cuenta {currentAccountId}");
+        Console.ResetColor();
+    }
+
+    byte[] infoResponse = new ConnectGameServerInfoPacket("127.0.0.1", "7031", 105).Serialize();
+    await stream.WriteAsync(infoResponse, 0, infoResponse.Length);
+    await stream.FlushAsync();
+    break;
+}
 
                 case CharacterServerPacketEnum.ConnectGameServer: // Opcode 1703
                 {

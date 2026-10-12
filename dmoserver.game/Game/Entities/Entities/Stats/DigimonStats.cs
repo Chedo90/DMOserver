@@ -1,5 +1,7 @@
 namespace dmoserver.game.Entities.Stats;
 
+using System; // Necesario para Math.Max
+
 public class DigimonStats
 {
     // Nivel
@@ -8,6 +10,9 @@ public class DigimonStats
     // Recursos vitales
     public int MaxHp { get; set; } = 500;
     public int MaxDs { get; set; } = 200;
+    
+    // --- AÑADIDO: El DS actual del Digimon ---
+    public int CurrentDs { get; set; } = 200; 
 
     // Ofensivos
     public int Attack { get; set; } = 120;       // AT
@@ -22,4 +27,16 @@ public class DigimonStats
 
     // Recompensa al morir (solo mobs)
     public int ExpReward { get; set; } = 50;
+
+    // Experiencia que configuraremos en la base de datos
+    public long TamerExpReward { get; set; }
+    public long DigimonExpReward { get; set; }
+
+    // --- AÑADIDO: Método para gastar el DS ---
+    public void UseDs(int amount)
+    {
+        if (amount <= 0) return;
+        
+        CurrentDs = Math.Max(0, CurrentDs - amount);
+    }
 }

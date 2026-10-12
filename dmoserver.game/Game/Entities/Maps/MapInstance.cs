@@ -50,7 +50,7 @@ public class MapInstance
                 MaxHp = template.MaxHp,
                 Attack = template.Attack,
                 Defense = template.Defense,
-                ExpReward = template.ExpReward
+                DigimonExpReward = template.DigimonExpReward
             } : new DigimonStats
             {
                 Level = 3,
