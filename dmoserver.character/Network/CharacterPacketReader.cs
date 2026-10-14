@@ -12,6 +12,9 @@ public class CharacterPacketReader
     public short Type { get; }
     public CharacterServerPacketEnum Enum => (CharacterServerPacketEnum)Type;
 
+    /// <summary>Bytes crudos del paquete completo (cabecera + cuerpo + checksum).</summary>
+    public byte[] Data => _buffer;
+
     public CharacterPacketReader(byte[] data)
     {
         _buffer = data;
@@ -28,18 +31,21 @@ public class CharacterPacketReader
     public void Skip(int count) => _position += count;
 
     public byte ReadByte() => _buffer[_position++];
+
     public short ReadShort()
     {
         short val = BitConverter.ToInt16(_buffer, _position);
         _position += 2;
         return val;
     }
+
     public int ReadInt()
     {
         int val = BitConverter.ToInt32(_buffer, _position);
         _position += 4;
         return val;
     }
+
     public uint ReadUInt()
     {
         uint val = BitConverter.ToUInt32(_buffer, _position);
@@ -47,12 +53,23 @@ public class CharacterPacketReader
         return val;
     }
 
-    // Lee texto dinámico con longitud
+    /// <summary>
+    /// Lee una cadena con formato [longitud][texto][0], igual que el LoginPacketReader.
+    /// Consume el byte nulo terminador si está presente, así el siguiente campo se lee bien.
+    /// </summary>
     public string ReadString()
     {
         byte len = ReadByte();
+
+        if (_position + len > _buffer.Length)
+            throw new InvalidDataException("Cadena fuera de los límites del paquete.");
+
         string val = Encoding.ASCII.GetString(_buffer, _position, len);
         _position += len;
+
+        if (_position < _buffer.Length && _buffer[_position] == 0)
+            _position++;
+
         return val;
     }
 

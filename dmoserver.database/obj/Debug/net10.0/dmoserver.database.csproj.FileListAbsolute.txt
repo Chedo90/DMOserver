@@ -1,3 +1,6 @@
+C:\Temp\dmo_check\dmoserver.database.deps.json
+C:\Temp\dmo_check\dmoserver.database.dll
+C:\Temp\dmo_check\dmoserver.database.pdb
 C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.deps.json
 C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.dll
 C:\Users\unive\Desktop\DMOserver\dmoserver.database\bin\Debug\net10.0\dmoserver.database.pdb

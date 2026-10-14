@@ -18,12 +18,16 @@ public class CharacterListPacket : PacketWriter
         {
             byte[] emptyItem = new byte[68];
 
-            foreach (var character in characters.Where(c => c.Partner != null).OrderBy(c => c.Slot))
+            foreach (var character in characters.OrderBy(c => c.Slot))
             {
+                // Defensivo: si el documento en Mongo trae estos campos a null, se usan valores por defecto
+                var location = character.Location ?? new CharacterLocation();
+                var partner = character.Partner ?? new PartnerDigimonDocument();
+
                 WriteByte(character.Slot);
-                WriteShort(105); // MapId por defecto (D-Terminal / DATS)
+                WriteShort((short)location.MapId);          // MapId real del personaje
                 WriteInt(character.Model);
-                WriteByte((byte)(character.Level > 0 ? character.Level : 1));
+                WriteByte(ToLevelByte(character.Level));
                 WriteString(character.Name);
 
                 // 13 slots de equipamiento vacíos (68 bytes cada uno)
@@ -32,10 +36,10 @@ public class CharacterListPacket : PacketWriter
                     WriteBytes(emptyItem);
                 }
 
-                WriteInt(character.Partner.Model);
-                WriteByte(1); // Nivel 1 inicial del Digimon
-                WriteString(character.Partner.Name);
-                WriteShort(10000); // Tamaño / Scale (100.00%)
+                WriteInt(partner.Model);
+                WriteByte(ToLevelByte(partner.Level));      // Nivel real del Digimon
+                WriteString(partner.Name);
+                WriteShort(partner.Size > 0 ? partner.Size : (short)10000); // Tamaño / Scale (10000 = 100.00%)
 
                 // 3 shorts de cierre por personaje (flags y seal leader)
                 WriteShort(0);
@@ -47,4 +51,6 @@ public class CharacterListPacket : PacketWriter
         // Byte 99 indica al cliente el fin de la lista
         WriteByte(99);
     }
+
+    private static byte ToLevelByte(short level) => (byte)Math.Clamp((int)level, 1, 255);
 }

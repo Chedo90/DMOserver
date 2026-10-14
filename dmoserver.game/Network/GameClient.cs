@@ -18,7 +18,7 @@ using dmoserver.game.Packets.Entities;
 
 public sealed class GameClient(TcpClient socket)
 {
-    private const short HandshakeDegree = 32321;
+    public const short HandshakeDegree = 32321;
     private const int OnConnectEventHandshakeHandler = 65535;
 
     internal static readonly MongoDbContext Db = new();
@@ -29,7 +29,8 @@ public sealed class GameClient(TcpClient socket)
     private readonly NetworkStream _stream = socket.GetStream();
     private readonly string _endPoint = socket.Client.RemoteEndPoint?.ToString() ?? "Desconocido";
     private short _clientHandshake;
-    private DateTime _lastPositionSave = DateTime.MinValue;
+    public short ClientHandshake => _clientHandshake;
+    public DateTime LastPositionSave { get; set; } = DateTime.MinValue;
 
     public PlayerEntity Player { get; } = new();
     public MapInstance? CurrentMap { get; private set; }
@@ -121,7 +122,7 @@ public sealed class GameClient(TcpClient socket)
                         Console.ResetColor();
                     }
 
-                    await ProcessPacketAsync(packet, packetData, packetLength);
+                    await ProcessPacketAsync(packet);
                 }
                 finally
                 {
@@ -148,174 +149,9 @@ public sealed class GameClient(TcpClient socket)
         }
     }
 
-    private async Task ProcessPacketAsync(GamePacketReader packet, byte[] rawData, int packetLength)
+    private async Task ProcessPacketAsync(GamePacketReader packet)
     {
-        switch (packet.Type)
-        {
-            case -1:
-            {
-                packet.ReadByte();
-                var handshakeTimestamp = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                var handshake = (short)(_clientHandshake ^ HandshakeDegree);
-                byte[] connResponse = new ConnectionPacket(handshake, handshakeTimestamp).Serialize();
-                await SendAsync(connResponse);
-                break;
-            }
-
-            case -3:
-                break;
-
-            case 1302:
-            {
-                Player.SelectedCharacterName = packet.ReadString();
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[Selección] El cliente eligió al Tamer: {Player.SelectedCharacterName}");
-                Console.ResetColor();
-                break;
-            }
-
-            case 1706: // InitialInformation delegado a LoginWorldHandler
-{
-    // 1. Extraemos el AccountId que el cliente envía al saltar al Game Server
-    packet.Seek(8);
-    uint incomingAccountId = packet.ReadUInt();
-
-    if (incomingAccountId > 0)
-    {
-        // Asignamos el AccountId real a la sesión actual en memoria
-        Player.AccountId = incomingAccountId;
-        
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"[+] [GameServer] Cliente autorizado entrando al mundo con AccountId: {incomingAccountId}");
-        Console.ResetColor();
-    }
-    else
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("[!] [GameServer] Advertencia: El AccountId recibido es 0.");
-        Console.ResetColor();
-    }
-
-    // 2. Ahora delegamos al handler. Como Player.AccountId ya tiene el ID correcto, cargará sus propios personajes.
-    await LoginWorldHandler.HandleInitialInformationAsync(this, packet);
-    break;
-}
-            case 1001: // Pantalla de carga terminada
-            {
-                if (Player.Character != null && Player.LastLoadedMapId != Player.Character.Location.MapId)
-                {
-                    int mapId = Player.Character.Location.MapId;
-
-                    CurrentMap ??= MapManager.GetOrCreateMap(mapId);
-                    CurrentMap.Players.TryAdd(_endPoint, this);
-
-                    await CurrentMap.LoadSpawnsAsync(Db);
-
-                    foreach (var mob in CurrentMap.Monsters.Values)
-                    {
-                        await SendAsync(new MobSpawnPacket(
-                        mob.Handle, (int)mob.ModelId, mob.X, mob.Y, (byte)mob.Stats.Level).Serialize());
-
-                        await SendAsync(new MobStatePacket(mob.Handle).Serialize());
-                    }
-
-                    Player.LastLoadedMapId = mapId;
-                }
-                break;
-            }
-
-            case 1016: // Selección de objetivo
-            {
-                Console.WriteLine($"[1016 RAW] {Hex(rawData, packetLength)}");
-                TargetHandler.HandleTargetSelection(this, packet);
-                break;
-            }
-
-            case 1033: // Desconocido: solo lo volcamos
-            {
-                Console.WriteLine($"[1033 RAW] {Hex(rawData, packetLength)}");
-                // Aquí puedes agregar la lógica específica para el opcode 1033
-                break;
-            }
-
-            case 1713:
-            {
-                Console.WriteLine("[1713] recibido (ignorado)");
-                break;
-            }
-
-case 1004: // SyncMovement
-{
-    packet.ReadUInt();
-    packet.ReadShort();
-    packet.ReadShort();
-    int destX = packet.ReadInt();
-    int destY = packet.ReadInt();
-    float destZ = BitConverter.Int32BitsToSingle(packet.ReadInt()); // Cambiamos yaw por destZ
-
-    Player.X = destX;
-    Player.Y = destY;
-    // Si necesitas guardar el Yaw o Z en PlayerEntity a futuro, lo puedes asignar aquí.
-
-    // AÑADIDO: El log en consola para capturar los puntos de spawn
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"[📍 POSICIÓN MAPA] X: {destX} | Y: {destY} | Z: {destZ}");
-    Console.ResetColor();
-
-    // Guardar como máximo cada 5 segundos (al desconectar se guarda igualmente en el finally)
-    var now = DateTime.UtcNow;
-    if (Player.Account != null && Player.Character != null &&
-        (now - _lastPositionSave).TotalSeconds >= 5)
-    {
-        _lastPositionSave = now;
-        // CORREGIDO: Pasamos destZ a la base de datos en lugar de 0f
-        _ = Db.UpdatePositionAsync(Player.Account.AccountId, Player.Character.Slot, destX, destY, destZ);
-    }
-    break;
-}
-
-            case 1013: // Ataque básico
-            case 1022: // Auto-ataque continuo
-            {
-                Console.WriteLine($"[{packet.Type} RAW] {Hex(rawData, packetLength)}");
-                await CombatHandler.HandleAttackRequestAsync(this, packet);
-                break;
-            }
-            case 1015: // Ataque de habilidad
-            {
-                Console.WriteLine($"[{packet.Type} RAW] {Hex(rawData, packetLength)}");
-                await CombatHandler.HandleSkillRequestAsync(this, packet);
-                break;
-            }
-
-            case 1008: // Chat
-            {
-                await ChatHandler.HandleAsync(this, packet);
-                break;
-            }
-
-            case 1709: // Portales
-            {
-                int portalId = packet.ReadInt();
-                short channel = packet.ReadShort();
-
-                CurrentMap?.Players.TryRemove(_endPoint, out _);
-
-                await SendAsync(new MapSwapPacket("127.0.0.1", 7035, 89, 25000, 25000).Serialize());
-                break;
-            }
-
-            default:
-            {
-                if (packet.Type != 0)
-                {
-                    Console.ForegroundColor = ConsoleColor.DarkYellow;
-                    Console.WriteLine($"[!] Opcode no manejado: {packet.Type} (Tamaño: {packet.Length})");
-                    Console.ResetColor();
-                }
-                break;
-            }
-        }
+        await PacketDispatcher.DispatchAsync(this, packet);
     }
 
     public async Task SendChatMessageAsync(string text)

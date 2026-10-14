@@ -18,6 +18,12 @@ public sealed class GameServer(int port)
         Console.WriteLine("Esperando que el cliente entre desde la pantalla de carga...\n");
         Console.ResetColor();
 
+        // Asegurar que las plantillas de Digimons compañeros (Digimon_List.xml) estén en MongoDB
+        await dmoserver.database.DigimonListImporter.EnsureDigimonTemplatesAsync(GameClient.Db);
+
+        // Asegurar que los portales oficiales (MapPortal.xml y requisitos de NPC.xml) estén en MongoDB
+        await dmoserver.database.MapPortalImporter.EnsurePortalsAsync(GameClient.Db);
+
         while (true)
         {
             TcpClient tcpClient = await _listener.AcceptTcpClientAsync();

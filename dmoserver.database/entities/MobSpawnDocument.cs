@@ -3,6 +3,7 @@ namespace dmoserver.database;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
+[BsonIgnoreExtraElements]
 public class MobSpawnDocument
 {
     [BsonId]
@@ -12,7 +13,7 @@ public class MobSpawnDocument
     public int MapId { get; set; }
 
     [BsonElement("monster_id")]
-    public int MonsterId { get; set; } // Ej: 30419 (Agumon)
+    public int MonsterId { get; set; }
 
     [BsonElement("x")]
     public int X { get; set; }

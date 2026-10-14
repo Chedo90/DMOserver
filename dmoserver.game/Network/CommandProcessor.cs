@@ -44,6 +44,33 @@ public static class CommandProcessor
                 break;
             }
 
+            case "revivir":
+            case "revive":
+            case "heal":
+            {
+                var player = client.Player;
+                if (player != null)
+                {
+                    player.PartnerStats.CurrentHp = player.PartnerStats.MaxHp;
+                    player.PartnerStats.CurrentDs = player.PartnerStats.MaxDs;
+                    player.InCombat = false;
+                    player.CombatTargetHandle = 0;
+
+                    var updatePacket = new dmoserver.game.Packets.UpdateStatusPacket(
+                        player.PartnerHandle,
+                        player.PartnerStats.CurrentHp,
+                        player.PartnerStats.MaxHp,
+                        player.PartnerStats.CurrentDs,
+                        player.PartnerStats.MaxDs
+                    ).Serialize();
+
+                    await client.SendAsync(updatePacket);
+                    await client.SendAsync(new dmoserver.game.Packets.Combat.SetCombatOffPacket(player.PartnerHandle).Serialize());
+                    await client.SendChatMessageAsync("¡Tu Digimon compañero ha sido revivido y restaurado!");
+                }
+                break;
+            }
+
             default:
             {
                 await client.SendChatMessageAsync($"Comando no reconocido: /{command}");

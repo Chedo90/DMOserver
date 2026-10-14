@@ -40,6 +40,15 @@ public sealed class GamePacketReader
         _position = 4;
     }
 
+    public byte[] Buffer => _buffer;
+    public int ActualLength => _actualLength;
+
+    public string ToHexString()
+    {
+        int len = Math.Min(_actualLength, _buffer.Length);
+        return BitConverter.ToString(_buffer, 0, len).Replace("-", "");
+    }
+
     public void Seek(int position) => _position = position;
     public void Skip(int bytes) => _position += bytes;
 
